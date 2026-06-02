@@ -21,6 +21,7 @@ import { RootStackParamList, TabParamList } from "../../App";
 import {
   loadWorkouts,
   loadData,
+  loadRestDays,
   deleteWorkout,
   getDayNumber,
   formatDate,
@@ -28,9 +29,11 @@ import {
 } from "../utils/storage";
 import {
   computeFitnessScore,
+  computeScoreHistory,
   FEELING_LABELS,
   WORKOUT_TYPES,
 } from "../utils/fitnessScore";
+import ProgressChart from "../components/ProgressChart";
 
 type Props = {
   navigation: CompositeNavigationProp<
@@ -63,12 +66,14 @@ export default function HistoryScreen({ navigation }: Props) {
   const [programStarted, setProgramStarted] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [fullPhoto, setFullPhoto] = useState<string | null>(null);
+  const [restDays, setRestDays] = useState<string[]>([]);
 
   useFocusEffect(
     useCallback(() => {
       (async () => {
-        const [wks, appData] = await Promise.all([loadWorkouts(), loadData()]);
+        const [wks, appData, rds] = await Promise.all([loadWorkouts(), loadData(), loadRestDays()]);
         setWorkouts(wks);
+        setRestDays(rds);
         if (appData.startDate && appData.programStarted) {
           const day = getDayNumber(appData.startDate);
           setDayNumber(day);
@@ -79,18 +84,34 @@ export default function HistoryScreen({ navigation }: Props) {
     }, []),
   );
 
-  const score = computeFitnessScore(workouts, "", dayNumber);
+  const score = computeFitnessScore(workouts, "", dayNumber, restDays);
 
-  const markedDates = workouts.reduce<Record<string, any>>((acc, w) => {
-    acc[w.date] = {
-      marked: true,
-      dotColor: '#00E5CC',
-      ...(selectedDate === w.date && { selected: true, selectedColor: 'rgba(0,229,204,0.25)' }),
-    };
-    return acc;
-  }, selectedDate && !workouts.find(w => w.date === selectedDate)
-    ? { [selectedDate]: { selected: true, selectedColor: 'rgba(0,229,204,0.15)' } }
-    : {});
+  const markedDates = (() => {
+    const marks: Record<string, any> = {};
+    // workout days — teal dot
+    for (const w of workouts) {
+      marks[w.date] = {
+        marked: true,
+        dotColor: '#00E5CC',
+        ...(selectedDate === w.date && { selected: true, selectedColor: 'rgba(0,229,204,0.25)' }),
+      };
+    }
+    // rest days — purple dot (don't overwrite workout days)
+    for (const d of restDays) {
+      if (!marks[d]) {
+        marks[d] = {
+          marked: true,
+          dotColor: '#8B5CF6',
+          ...(selectedDate === d && { selected: true, selectedColor: 'rgba(139,92,246,0.2)' }),
+        };
+      }
+    }
+    // selected date with no data
+    if (selectedDate && !marks[selectedDate]) {
+      marks[selectedDate] = { selected: true, selectedColor: 'rgba(0,229,204,0.15)' };
+    }
+    return marks;
+  })();
 
   const filteredWorkouts = selectedDate
     ? workouts.filter(w => w.date === selectedDate)
@@ -132,10 +153,9 @@ export default function HistoryScreen({ navigation }: Props) {
             colors={["#00BFFF", "#39FF14"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
-            style={styles.logBtnGradient}
-          >
-            <Text style={styles.logBtnText}>+ Log</Text>
-          </LinearGradient>
+            style={StyleSheet.absoluteFill}
+          />
+          <Text style={styles.logBtnText}>+ Log</Text>
         </TouchableOpacity>
       </View>
 
@@ -190,6 +210,17 @@ export default function HistoryScreen({ navigation }: Props) {
                   </Text>
                   <Text style={styles.bannerLabel}>Fitness Score</Text>
                 </View>
+              </View>
+            )}
+
+            {/* Progress chart */}
+            {workouts.length >= 2 && dayNumber >= 2 && (
+              <View style={styles.chartCard}>
+                <Text style={styles.sectionTitle}>Fitness Score Over Time</Text>
+                <ProgressChart
+                  scores={computeScoreHistory(workouts, '', dayNumber, restDays)}
+                  currentDay={dayNumber}
+                />
               </View>
             )}
 
@@ -323,6 +354,9 @@ export default function HistoryScreen({ navigation }: Props) {
                   </View>
                   <View style={styles.cardStats}>
                     <Text style={styles.cardDuration}>{item.duration} min</Text>
+                    {item.distanceKm != null && (
+                      <Text style={styles.cardDistance}>📍 {item.distanceKm.toFixed(2)} km</Text>
+                    )}
                     {item.notes ? (
                       <Text style={styles.cardNotes} numberOfLines={2}>{item.notes}</Text>
                     ) : null}
@@ -365,19 +399,18 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   headerTitle: { fontSize: 28, fontWeight: "900", color: "#fff" },
-  logBtn: { borderRadius: 10 },
-  logBtnGradient: {
-    paddingVertical: 9,
-    paddingHorizontal: 18,
-    borderRadius: 12,
+  logBtn: {
+    borderRadius: 10,
+    overflow: 'hidden',
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   logBtnText: {
     color: "#fff",
     fontWeight: "800",
-    fontSize: 16,
-    marginBottom: 20,
-    marginLeft: -5,
-    width: 75,
+    fontSize: 13,
   },
 
   list: { paddingHorizontal: 20, paddingBottom: 40 },
@@ -404,6 +437,15 @@ const styles = StyleSheet.create({
   },
 
   // Score breakdown
+  chartCard: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.07)',
+    overflow: 'hidden',
+  },
   scoreBreakdown: {
     backgroundColor: "rgba(255,255,255,0.04)",
     borderRadius: 18,
@@ -515,6 +557,7 @@ const styles = StyleSheet.create({
   cardFeeling: { fontSize: 13, fontWeight: "600" },
   cardStats: { flexDirection: "row", alignItems: "center", gap: 12 },
   cardDuration: { color: "#00E5CC", fontSize: 18, fontWeight: "800" },
+  cardDistance: { color: "rgba(0,229,204,0.7)", fontSize: 13, fontWeight: "600" },
   cardNotes: {
     flex: 1,
     color: "rgba(255,255,255,0.45)",

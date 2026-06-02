@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,17 @@ import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../../App';
 import { saveWorkout, updateWorkout, loadData, getDayNumber, todayString, WorkoutEntry } from '../utils/storage';
 import { WORKOUT_TYPES, FEELING_LABELS } from '../utils/fitnessScore';
+import { isReady, saveWorkoutToHealth, fetchWorkoutData } from '../utils/healthKit';
+import {
+  requestLocationPermissions,
+  startGpsTracking,
+  stopGpsTracking,
+  getGpsSnapshot,
+  clearGpsRun,
+  computeDistanceKm,
+  computeElapsedMs,
+  formatElapsed,
+} from '../utils/gps';
 
 interface Props {
   navigation: NativeStackNavigationProp<RootStackParamList, 'LogWorkout'>;
@@ -33,8 +44,81 @@ export default function LogWorkoutScreen({ navigation, route }: Props) {
   const [notes, setNotes] = useState(existing?.notes ?? '');
   const [photoUri, setPhotoUri] = useState<string | null>(existing?.photoUri ?? null);
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [hkData, setHkData] = useState<{ heartRateAvg: number | null; calories: number | null } | null>(null);
+
+  // GPS
+  const [gpsState, setGpsState] = useState<'idle' | 'tracking' | 'done'>('idle');
+  const [distanceKm, setDistanceKm] = useState(0);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const GPS_TYPES = ['Run', 'Walk', 'Ride'];
+  const showGps = GPS_TYPES.includes(workoutType) && !existing;
+
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
+
+  const handleStartGps = async () => {
+    const { granted } = await requestLocationPermissions();
+    if (!granted) {
+      Alert.alert('Location needed', 'Allow location access to track distance.');
+      return;
+    }
+    await startGpsTracking(true);
+    setGpsState('tracking');
+    pollRef.current = setInterval(async () => {
+      const snap = await getGpsSnapshot();
+      if (!snap) return;
+      setDistanceKm(computeDistanceKm(snap.locations));
+      setElapsedMs(computeElapsedMs(snap));
+    }, 1000);
+  };
+
+  const handleStopGps = async () => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    // Capture elapsed before stopping so we get the accurate value
+    const liveSnap = await getGpsSnapshot();
+    const capturedElapsed = liveSnap ? computeElapsedMs(liveSnap) : elapsedMs;
+    const snap = await stopGpsTracking();
+    if (snap) {
+      const km = computeDistanceKm(snap.locations);
+      const mins = Math.ceil(capturedElapsed / 60000); // ceil so 1m5s → 2min
+      setDistanceKm(km);
+      setElapsedMs(capturedElapsed);
+      // Always populate duration from GPS if user hasn't typed one
+      if (mins > 0) setDuration(String(mins));
+    }
+    setGpsState('done');
+  };
+
+  const handleDiscardGps = async () => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    await clearGpsRun();
+    setGpsState('idle');
+    setDistanceKm(0);
+    setElapsedMs(0);
+  };
 
   const isEditing = !!existing;
+
+  const handleSyncHealth = async () => {
+    const mins = parseInt(duration, 10);
+    if (!mins || mins <= 0) {
+      Alert.alert('Enter duration first', 'We need the duration to fetch the right time window.');
+      return;
+    }
+    setSyncing(true);
+    const data = await fetchWorkoutData(mins);
+    setHkData(data);
+    setSyncing(false);
+    if (data.heartRateAvg == null && data.calories == null) {
+      Alert.alert('No data found', 'No heart rate or calorie data found in Health for that window.');
+    }
+  };
 
   const handlePickPhoto = () => {
     Alert.alert('Add Photo', 'Choose a source', [
@@ -81,6 +165,9 @@ export default function LogWorkoutScreen({ navigation, route }: Props) {
     setSaving(true);
     try {
       const photoField = photoUri ? { photoUri } : {};
+      const gpsField = gpsState === 'done' && distanceKm > 0 ? { distanceKm: Math.round(distanceKm * 100) / 100 } : {};
+      if (gpsState === 'tracking') await handleStopGps();
+      if (gpsState !== 'idle') await clearGpsRun();
       if (isEditing) {
         await updateWorkout({ ...existing, type: workoutType, duration: mins, feeling, notes: notes.trim(), ...photoField });
       } else {
@@ -91,6 +178,7 @@ export default function LogWorkoutScreen({ navigation, route }: Props) {
           return;
         }
         const dayNumber = getDayNumber(startDate);
+        const now = new Date();
         const entry: WorkoutEntry = {
           id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
           date: todayString(),
@@ -99,9 +187,19 @@ export default function LogWorkoutScreen({ navigation, route }: Props) {
           duration: mins,
           feeling,
           notes: notes.trim(),
+          ...(hkData?.heartRateAvg != null ? { heartRateAvg: hkData.heartRateAvg } : {}),
+          ...(hkData?.calories != null ? { calories: hkData.calories } : {}),
           ...photoField,
+          ...gpsField,
         };
         await saveWorkout(entry);
+        // Auto-write to Apple Health (fire-and-forget)
+        saveWorkoutToHealth({
+          type: workoutType,
+          durationMins: mins,
+          calories: hkData?.calories ?? undefined,
+          startDate: new Date(now.getTime() - mins * 60 * 1000),
+        });
       }
       navigation.goBack();
     } catch {
@@ -181,6 +279,78 @@ export default function LogWorkoutScreen({ navigation, route }: Props) {
               </TouchableOpacity>
             ))}
           </View>
+
+          {/* GPS tracking */}
+          {showGps && (
+            <View style={styles.gpsSection}>
+              {gpsState === 'idle' && (
+                <TouchableOpacity style={styles.gpsStartBtn} onPress={handleStartGps} activeOpacity={0.8}>
+                  <Text style={styles.gpsIcon}>📍</Text>
+                  <Text style={styles.gpsStartText}>Track distance with GPS</Text>
+                </TouchableOpacity>
+              )}
+              {gpsState === 'tracking' && (
+                <View style={styles.gpsLive}>
+                  <View style={styles.gpsLiveStats}>
+                    <View style={styles.gpsLiveStat}>
+                      <Text style={styles.gpsLiveValue}>{distanceKm.toFixed(2)}</Text>
+                      <Text style={styles.gpsLiveLabel}>km</Text>
+                    </View>
+                    <View style={styles.gpsLiveDivider} />
+                    <View style={styles.gpsLiveStat}>
+                      <Text style={styles.gpsLiveValue}>{formatElapsed(elapsedMs)}</Text>
+                      <Text style={styles.gpsLiveLabel}>elapsed</Text>
+                    </View>
+                  </View>
+                  <View style={styles.gpsLiveDot} />
+                  <TouchableOpacity style={styles.gpsStopBtn} onPress={handleStopGps} activeOpacity={0.8}>
+                    <Text style={styles.gpsStopText}>■  Stop GPS</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              {gpsState === 'done' && (
+                <View style={styles.gpsDone}>
+                  <Text style={styles.gpsDoneText}>📍 {distanceKm.toFixed(2)} km tracked</Text>
+                  <TouchableOpacity onPress={handleDiscardGps}>
+                    <Text style={styles.gpsDiscard}>Discard</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Import from Health */}
+          {isReady() && !isEditing && (
+            <>
+              <TouchableOpacity
+                style={styles.hkBtn}
+                onPress={handleSyncHealth}
+                activeOpacity={0.8}
+                disabled={syncing}
+              >
+                <Text style={styles.hkBtnIcon}>❤️</Text>
+                <Text style={styles.hkBtnText}>
+                  {syncing ? 'Reading Health…' : 'Import from Apple Health'}
+                </Text>
+              </TouchableOpacity>
+              {hkData && (hkData.heartRateAvg != null || hkData.calories != null) && (
+                <View style={styles.hkDataRow}>
+                  {hkData.heartRateAvg != null && (
+                    <View style={styles.hkChip}>
+                      <Text style={styles.hkChipValue}>{hkData.heartRateAvg}</Text>
+                      <Text style={styles.hkChipLabel}>avg bpm</Text>
+                    </View>
+                  )}
+                  {hkData.calories != null && (
+                    <View style={styles.hkChip}>
+                      <Text style={styles.hkChipValue}>{hkData.calories}</Text>
+                      <Text style={styles.hkChipLabel}>kcal</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </>
+          )}
 
           {/* Feeling */}
           <Text style={styles.sectionLabel}>How did it feel?</Text>
@@ -338,6 +508,89 @@ const styles = StyleSheet.create({
   quickPillSelected: { backgroundColor: 'rgba(0,229,204,0.15)', borderColor: '#00E5CC' },
   quickPillText: { color: 'rgba(255,255,255,0.5)', fontSize: 13, fontWeight: '600' },
   quickPillTextSelected: { color: '#00E5CC' },
+
+  // GPS
+  gpsSection: { marginTop: 12 },
+  gpsStartBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(0,229,204,0.25)',
+    borderStyle: 'dashed',
+  },
+  gpsIcon: { fontSize: 18 },
+  gpsStartText: { color: 'rgba(0,229,204,0.7)', fontSize: 14, fontWeight: '600' },
+  gpsLive: {
+    backgroundColor: 'rgba(0,229,204,0.08)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(0,229,204,0.3)',
+    padding: 14,
+    gap: 10,
+  },
+  gpsLiveStats: { flexDirection: 'row', alignItems: 'center' },
+  gpsLiveStat: { flex: 1, alignItems: 'center' },
+  gpsLiveValue: { fontSize: 26, fontWeight: '900', color: '#00E5CC' },
+  gpsLiveLabel: { fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 },
+  gpsLiveDivider: { width: 1, height: 36, backgroundColor: 'rgba(255,255,255,0.1)' },
+  gpsLiveDot: {
+    width: 8, height: 8, borderRadius: 4,
+    backgroundColor: '#00E5CC',
+    alignSelf: 'center',
+  },
+  gpsStopBtn: {
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.4)',
+  },
+  gpsStopText: { color: '#EF4444', fontSize: 14, fontWeight: '700' },
+  gpsDone: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,229,204,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(0,229,204,0.25)',
+  },
+  gpsDoneText: { color: '#00E5CC', fontSize: 14, fontWeight: '700' },
+  gpsDiscard: { color: 'rgba(255,255,255,0.35)', fontSize: 12 },
+
+  // HealthKit
+  hkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,59,48,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,59,48,0.25)',
+  },
+  hkBtnIcon: { fontSize: 16 },
+  hkBtnText: { color: '#FF6B6B', fontSize: 14, fontWeight: '600' },
+  hkDataRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
+  hkChip: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,59,48,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,59,48,0.2)',
+  },
+  hkChipValue: { color: '#FF6B6B', fontSize: 20, fontWeight: '800' },
+  hkChipLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 11, marginTop: 2 },
 
   // Feeling
   feelingRow: { flexDirection: 'row', gap: 8 },

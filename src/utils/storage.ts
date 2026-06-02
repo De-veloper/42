@@ -5,6 +5,7 @@ const KEYS = {
   COMPLETED_DAYS: '@42_completed_days',
   PROGRAM_STARTED: '@42_program_started',
   WORKOUTS: '@42_workouts',
+  REST_DAYS: '@42_rest_days',
 };
 
 export interface AppData {
@@ -22,6 +23,9 @@ export interface WorkoutEntry {
   feeling: number;    // 1–5
   notes: string;
   photoUri?: string;
+  heartRateAvg?: number;
+  calories?: number;
+  distanceKm?: number;
 }
 
 export async function loadData(): Promise<AppData> {
@@ -55,6 +59,22 @@ export async function toggleDayComplete(day: number, completedDays: number[]): P
 
 export async function resetAll(): Promise<void> {
   await Promise.all(Object.values(KEYS).map(k => AsyncStorage.removeItem(k)));
+}
+
+// ── Rest days ──────────────────────────────────────────────────────────────────
+
+export async function loadRestDays(): Promise<string[]> {
+  const raw = await AsyncStorage.getItem(KEYS.REST_DAYS);
+  return raw ? JSON.parse(raw) : [];
+}
+
+export async function toggleRestDay(date: string): Promise<string[]> {
+  const existing = await loadRestDays();
+  const updated = existing.includes(date)
+    ? existing.filter(d => d !== date)
+    : [...existing, date];
+  await AsyncStorage.setItem(KEYS.REST_DAYS, JSON.stringify(updated));
+  return updated;
 }
 
 // ── Workout CRUD ──────────────────────────────────────────────────────────────
@@ -99,7 +119,7 @@ export function todayString(): string {
 }
 
 export function getDayNumber(startDate: string): number {
-  const start = new Date(startDate);
+  const start = new Date(startDate + 'T00:00:00');
   const today = new Date();
   start.setHours(0, 0, 0, 0);
   today.setHours(0, 0, 0, 0);

@@ -5,7 +5,12 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#020B18"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.FortyTwo",
@@ -29,6 +34,14 @@
     },
     "plugins": [
       [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "42 uses your location to track distance during outdoor workouts.",
+          "locationAlwaysAndWhenInUsePermission": "42 uses your location to track distance even when the screen is off.",
+          "isIosBackgroundLocationEnabled": true
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "42 uses your photos to add workout photos.",
@@ -41,7 +54,7 @@
         {
           "sounds": []
         }
-      ]
+      ],
     ]
   }
 }

@@ -19,10 +19,10 @@ import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList, TabParamList } from "../../App";
 import CircularProgress from "../components/CircularProgress";
+import GaugeRing from "../components/GaugeRing";
 import {
   requestNotificationPermission,
   scheduleDailyReminder,
-  cancelReminders,
   getSavedReminderTime,
   saveReminderTime,
   sendTestNotification,
@@ -34,15 +34,16 @@ import {
   getUnlockedIds,
   getSeenMilestones,
   markMilestonesSeen,
-  resetMilestones,
 } from "../utils/milestones";
 import {
   loadData,
   loadWorkouts,
+  loadRestDays,
+  toggleRestDay,
+  todayString,
   saveStartDate,
   saveProgramStarted,
   getDayNumber,
-  resetAll,
   AppData,
   WorkoutEntry,
 } from "../utils/storage";
@@ -67,9 +68,9 @@ export default function HomeScreen({ navigation }: Props) {
   });
   const [workouts, setWorkouts] = useState<WorkoutEntry[]>([]);
   const [reminderHour, setReminderHour] = useState(DEFAULT_HOUR);
-  const [showReminderModal, setShowReminderModal] = useState(false);
   const [newMilestone, setNewMilestone] = useState<Milestone | null>(null);
   const [unlockedIds, setUnlockedIds] = useState<string[]>([]);
+  const [restDays, setRestDays] = useState<string[]>([]);
   const shareCardRef = useRef<ViewShotRef>(null);
 
   useEffect(() => {
@@ -79,9 +80,10 @@ export default function HomeScreen({ navigation }: Props) {
   useFocusEffect(
     useCallback(() => {
       (async () => {
-        const [appData, wks] = await Promise.all([loadData(), loadWorkouts()]);
+        const [appData, wks, rds] = await Promise.all([loadData(), loadWorkouts(), loadRestDays()]);
         setData(appData);
         setWorkouts(wks);
+        setRestDays(rds);
       })();
     }, []),
   );
@@ -96,38 +98,42 @@ export default function HomeScreen({ navigation }: Props) {
     if (granted) await scheduleDailyReminder(reminderHour, 0);
   };
 
+  const handleToggleRestDay = async () => {
+    const today = todayString();
+    const updated = await toggleRestDay(today);
+    setRestDays(updated);
+  };
+
   const handleChangeReminder = async (hour: number) => {
     setReminderHour(hour);
     await saveReminderTime(hour, 0);
     if (data.programStarted) await scheduleDailyReminder(hour, 0);
   };
 
-  const handleReset = () => {
-    Alert.alert("Reset Program", "This clears all data. Are you sure?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Reset",
-        style: "destructive",
-        onPress: async () => {
-          await resetAll();
-          await cancelReminders();
-          await resetMilestones();
-          setData({ startDate: null, completedDays: [], programStarted: false });
-          setWorkouts([]);
-          setUnlockedIds([]);
-        },
-      },
-    ]);
-  };
-
   const currentDay = data.startDate ? getDayNumber(data.startDate) : 0;
   const completedCount = new Set(workouts.map((w) => w.dayNumber)).size;
   const daysRemaining = Math.max(42 - currentDay, 0);
   const progress = completedCount / 42;
-  const score = computeFitnessScore(workouts, data.startDate ?? "", currentDay);
+  const score = computeFitnessScore(workouts, data.startDate ?? "", currentDay, restDays);
   const todayWorkouts = workouts.filter((w) => w.dayNumber === currentDay);
   const lastWorkout = workouts[0] ?? null;
   const isFinished = daysRemaining === 0;
+  const isRestDay = restDays.includes(todayString());
+
+  // Weekly summary
+  const weekNum = Math.ceil(currentDay / 7);
+  const weekStart = (weekNum - 1) * 7 + 1;
+  const weekEnd = Math.min(weekNum * 7, 42);
+  const prevWeekStart = (weekNum - 2) * 7 + 1;
+  const prevWeekEnd = weekStart - 1;
+  const thisWeekWorkouts = workouts.filter(w => w.dayNumber >= weekStart && w.dayNumber <= weekEnd);
+  const prevWeekWorkouts = workouts.filter(w => w.dayNumber >= prevWeekStart && w.dayNumber <= prevWeekEnd);
+  const weekDaysActive = new Set(thisWeekWorkouts.map(w => w.dayNumber)).size;
+  const weekTotalMins = thisWeekWorkouts.reduce((s, w) => s + w.duration, 0);
+  const prevScore = prevWeekWorkouts.length > 0
+    ? computeFitnessScore(workouts.filter(w => w.dayNumber <= prevWeekEnd), data.startDate ?? '', prevWeekEnd, restDays).total
+    : 0;
+  const scoreChange = score.total - prevScore;
 
   // Check for newly unlocked milestones
   useEffect(() => {
@@ -178,14 +184,13 @@ export default function HomeScreen({ navigation }: Props) {
             </Text>
           </View>
           <View style={styles.headerActions}>
-            <TouchableOpacity onPress={handleShare} style={styles.shareBtn}>
-              <Text style={styles.shareBtnText}>↑ Share</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setShowReminderModal(true)} style={styles.bellBtn}>
-              <Text style={styles.bellBtnText}>🔔</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleReset} style={styles.resetBtn}>
-              <Text style={styles.resetText}>Reset</Text>
+            {data.programStarted && (
+              <TouchableOpacity onPress={handleShare} style={styles.shareBtn}>
+                <Text style={styles.shareBtnText}>↑ Share</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={styles.bellBtn}>
+              <Text style={styles.bellBtnText}>⚙️</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -238,10 +243,9 @@ export default function HomeScreen({ navigation }: Props) {
                 colors={["#00BFFF", "#00E5CC", "#39FF14"]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
-                style={styles.primaryBtn}
-              >
-                <Text style={styles.primaryBtnText}>Begin Today</Text>
-              </LinearGradient>
+                style={StyleSheet.absoluteFill}
+              />
+              <Text style={styles.primaryBtnText}>Begin Today</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -252,35 +256,84 @@ export default function HomeScreen({ navigation }: Props) {
               <CircularProgress progress={progress} currentDay={currentDay} />
             </View>
 
-            {/* Days remaining + fitness score hero cards */}
+            {/* Days remaining + fitness score gauges */}
             <View style={styles.heroRow}>
-              {/* Days left */}
-              <LinearGradient
-                colors={["rgba(0,191,255,0.12)", "rgba(0,191,255,0.04)"]}
-                style={[styles.heroCard, styles.heroCardBorderBlue]}
-              >
-                <Text style={styles.heroValue}>{daysRemaining}</Text>
-                <Text style={styles.heroLabel}>Days Left</Text>
-                <Text style={styles.heroSub}>Day {currentDay} of 42</Text>
-              </LinearGradient>
-
-              {/* Fitness score */}
-              <LinearGradient
-                colors={[`${score.levelColor}22`, `${score.levelColor}08`]}
-                style={[
-                  styles.heroCard,
-                  { borderColor: `${score.levelColor}44` },
-                ]}
-              >
-                <Text style={[styles.heroValue, { color: score.levelColor }]}>
-                  {score.total}
-                </Text>
-                <Text style={styles.heroLabel}>Fitness Score</Text>
-                <Text style={[styles.heroSub, { color: score.levelColor }]}>
-                  {score.level}
-                </Text>
-              </LinearGradient>
+              <GaugeRing
+                value={daysRemaining}
+                label="Days Left"
+                sub={`Day ${currentDay} / 42`}
+                progress={daysRemaining / 42}
+                gradientColors={['#00BFFF', '#00E5CC']}
+              />
+              <GaugeRing
+                value={score.total}
+                label="Fitness Score"
+                sub={score.level}
+                progress={score.total / 100}
+                color={score.levelColor}
+              />
             </View>
+
+            {/* Weekly summary card */}
+            {data.programStarted && weekNum >= 1 && (
+              <View style={styles.weekCard}>
+                <View style={styles.weekCardHeader}>
+                  <Text style={styles.weekCardTitle}>Week {weekNum} <Text style={styles.weekCardOf}>of 6</Text></Text>
+                  <Text style={styles.weekCardDays}>Days {weekStart}–{weekEnd}</Text>
+                </View>
+
+                {/* Day dots */}
+                <View style={styles.weekDots}>
+                  {Array.from({ length: weekEnd - weekStart + 1 }, (_, i) => {
+                    const day = weekStart + i;
+                    const hasWorkout = workouts.some(w => w.dayNumber === day);
+                    const isRest = restDays.some(d => {
+                      const start = new Date(data.startDate!);
+                      start.setHours(0,0,0,0);
+                      const target = new Date(start.getTime() + (day - 1) * 86400000);
+                      const y = target.getFullYear();
+                      const m = String(target.getMonth() + 1).padStart(2,'0');
+                      const dd = String(target.getDate()).padStart(2,'0');
+                      return d === `${y}-${m}-${dd}`;
+                    });
+                    const isFuture = day > currentDay;
+                    return (
+                      <View
+                        key={day}
+                        style={[
+                          styles.weekDot,
+                          hasWorkout && styles.weekDotActive,
+                          isRest && styles.weekDotRest,
+                          isFuture && styles.weekDotFuture,
+                        ]}
+                      >
+                        <Text style={styles.weekDotLabel}>{day}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+
+                {/* Stats row */}
+                <View style={styles.weekStats}>
+                  <View style={styles.weekStat}>
+                    <Text style={styles.weekStatValue}>{weekDaysActive}<Text style={styles.weekStatOf}>/7</Text></Text>
+                    <Text style={styles.weekStatLabel}>Days active</Text>
+                  </View>
+                  <View style={styles.weekStatDivider} />
+                  <View style={styles.weekStat}>
+                    <Text style={styles.weekStatValue}>{weekTotalMins}</Text>
+                    <Text style={styles.weekStatLabel}>Total mins</Text>
+                  </View>
+                  <View style={styles.weekStatDivider} />
+                  <View style={styles.weekStat}>
+                    <Text style={[styles.weekStatValue, { color: scoreChange >= 0 ? '#39FF14' : '#EF4444' }]}>
+                      {scoreChange >= 0 ? '+' : ''}{scoreChange}
+                    </Text>
+                    <Text style={styles.weekStatLabel}>Score change</Text>
+                  </View>
+                </View>
+              </View>
+            )}
 
             {/* Streak badge */}
             {score.streak > 1 && (
@@ -316,24 +369,37 @@ export default function HomeScreen({ navigation }: Props) {
                   )}
                 </View>
 
-                {todayWorkouts.length === 0 ? (
-                  <TouchableOpacity
-                    style={styles.primaryBtnWrapper}
-                    onPress={() => navigation.navigate("LogWorkout")}
-                    activeOpacity={0.85}
-                  >
-                    <LinearGradient
-                      colors={["#00BFFF", "#00E5CC", "#39FF14"]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.primaryBtn}
-                    >
-                      <Text style={styles.primaryBtnText}>
-                        + Log Today's Workout
-                      </Text>
-                    </LinearGradient>
+                {isRestDay ? (
+                  /* ── REST DAY ── */
+                  <TouchableOpacity style={styles.restDayCard} onPress={handleToggleRestDay} activeOpacity={0.8}>
+                    <Text style={styles.restDayEmoji}>😴</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.restDayTitle}>Rest Day</Text>
+                      <Text style={styles.restDaySubtitle}>Recovery is part of the plan. Tap to undo.</Text>
+                    </View>
                   </TouchableOpacity>
+                ) : todayWorkouts.length === 0 ? (
+                  /* ── NO WORKOUT YET ── */
+                  <>
+                    <TouchableOpacity
+                      style={styles.primaryBtnWrapper}
+                      onPress={() => navigation.navigate("LogWorkout")}
+                      activeOpacity={0.85}
+                    >
+                      <LinearGradient
+                        colors={["#00BFFF", "#00E5CC", "#39FF14"]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={StyleSheet.absoluteFill}
+                      />
+                      <Text style={styles.primaryBtnText}>+ Log Today's Workout</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.restDayBtn} onPress={handleToggleRestDay} activeOpacity={0.75}>
+                      <Text style={styles.restDayBtnText}>😴  Mark as Rest Day</Text>
+                    </TouchableOpacity>
+                  </>
                 ) : (
+                  /* ── WORKOUTS LOGGED ── */
                   <>
                     {todayWorkouts.map((w) => (
                       <TodayWorkoutRow key={w.id} workout={w} />
@@ -343,9 +409,7 @@ export default function HomeScreen({ navigation }: Props) {
                       onPress={() => navigation.navigate("LogWorkout")}
                       activeOpacity={0.75}
                     >
-                      <Text style={styles.addMoreText}>
-                        + Add another session
-                      </Text>
+                      <Text style={styles.addMoreText}>+ Add another session</Text>
                     </TouchableOpacity>
                   </>
                 )}
@@ -452,39 +516,6 @@ export default function HomeScreen({ navigation }: Props) {
         </TouchableOpacity>
       </Modal>
 
-      {/* Reminder modal */}
-      <Modal visible={showReminderModal} transparent animationType="fade" onRequestClose={() => setShowReminderModal(false)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowReminderModal(false)}>
-          <View style={styles.modalCard} onStartShouldSetResponder={() => true}>
-            <Text style={styles.modalTitle}>🔔 Daily Reminder</Text>
-            <Text style={styles.modalSubtitle}>Pick what time to log your workout</Text>
-            <View style={styles.reminderPills}>
-              {[7, 12, 18, 20].map(h => (
-                <TouchableOpacity
-                  key={h}
-                  style={[styles.reminderPill, reminderHour === h && styles.reminderPillActive]}
-                  onPress={() => handleChangeReminder(h)}
-                >
-                  <Text style={[styles.reminderPillText, reminderHour === h && styles.reminderPillTextActive]}>
-                    {h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TouchableOpacity
-              style={styles.modalTestBtn}
-              onPress={async () => {
-                await requestNotificationPermission();
-                await sendTestNotification();
-                setShowReminderModal(false);
-                Alert.alert('Test sent', 'Background the app — notification arrives in 5 seconds.');
-              }}
-            >
-              <Text style={styles.modalTestBtnText}>Send test notification</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
 
       {/* Off-screen share card — captured by ViewShot */}
       <ViewShot ref={shareCardRef} options={{ format: 'png', quality: 1 }} style={styles.shareCard}>
@@ -742,6 +773,74 @@ const styles = StyleSheet.create({
   },
   milestoneDismissText: { color: '#00E5CC', fontSize: 16, fontWeight: '700' },
 
+  // Rest day
+  restDayCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: 'rgba(139,92,246,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(139,92,246,0.3)',
+  },
+  restDayEmoji: { fontSize: 28 },
+  restDayTitle: { fontSize: 15, fontWeight: '700', color: '#C4B5FD' },
+  restDaySubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 2 },
+  restDayBtn: {
+    marginTop: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(139,92,246,0.3)',
+    borderStyle: 'dashed',
+  },
+  restDayBtnText: { color: 'rgba(196,181,253,0.7)', fontSize: 14, fontWeight: '600' },
+
+  // Weekly summary card
+  weekCard: {
+    marginHorizontal: 24,
+    marginTop: 16,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(0,229,204,0.15)',
+  },
+  weekCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  weekCardTitle: { fontSize: 18, fontWeight: '900', color: '#fff' },
+  weekCardOf: { fontSize: 14, fontWeight: '500', color: 'rgba(255,255,255,0.35)' },
+  weekCardDays: { fontSize: 12, color: 'rgba(255,255,255,0.35)' },
+
+  weekDots: { flexDirection: 'row', gap: 6, marginBottom: 16 },
+  weekDot: {
+    flex: 1,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  weekDotActive: { backgroundColor: 'rgba(0,229,204,0.2)', borderColor: '#00E5CC' },
+  weekDotRest: { backgroundColor: 'rgba(139,92,246,0.15)', borderColor: '#8B5CF6' },
+  weekDotFuture: { opacity: 0.3 },
+  weekDotLabel: { fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.5)' },
+
+  weekStats: { flexDirection: 'row', alignItems: 'center' },
+  weekStat: { flex: 1, alignItems: 'center' },
+  weekStatValue: { fontSize: 22, fontWeight: '900', color: '#00E5CC' },
+  weekStatOf: { fontSize: 13, fontWeight: '500', color: 'rgba(255,255,255,0.35)' },
+  weekStatLabel: { fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 },
+  weekStatDivider: { width: 1, height: 36, backgroundColor: 'rgba(255,255,255,0.08)' },
+
   // Milestone badges grid
   badgesSection: { paddingHorizontal: 24, marginTop: 24 },
   badgesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10 },
@@ -791,12 +890,14 @@ const styles = StyleSheet.create({
     width: "100%",
     borderRadius: 16,
     overflow: "hidden",
+    paddingVertical: 18,
+    alignItems: "center",
+    justifyContent: "center",
     shadowColor: "#00E5CC",
     shadowOpacity: 0.35,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 4 },
   },
-  primaryBtn: { paddingVertical: 18, alignItems: "center", borderRadius: 16 },
   primaryBtnText: { color: "#020B18", fontSize: 17, fontWeight: "800" },
 
   // Ring
@@ -805,9 +906,9 @@ const styles = StyleSheet.create({
   // Hero cards
   heroRow: {
     flexDirection: "row",
-    gap: 12,
+    justifyContent: 'space-evenly',
     paddingHorizontal: 24,
-    marginTop: 16,
+    marginTop: 8,
   },
   heroCard: {
     flex: 1,

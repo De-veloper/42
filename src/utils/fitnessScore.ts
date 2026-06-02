@@ -25,6 +25,7 @@ export function computeFitnessScore(
   workouts: WorkoutEntry[],
   startDate: string,
   dayNumber: number,
+  restDays: string[] = [],
 ): FitnessScore {
   if (workouts.length === 0 || dayNumber < 1) {
     return {
@@ -34,11 +35,11 @@ export function computeFitnessScore(
     };
   }
 
+  // Consistency — rest days don't count as missed
   const daysElapsed = Math.max(dayNumber - 1, 1);
-
-  // Consistency — unique calendar days with a workout
   const uniqueDays = new Set(workouts.map(w => w.date)).size;
-  const consistency = Math.min(uniqueDays / daysElapsed, 1.0);
+  const activeDays = Math.max(daysElapsed - restDays.length, 1);
+  const consistency = Math.min(uniqueDays / activeDays, 1.0);
 
   // Effort — avg feeling (1–5) normalised to 0–1
   const avgFeeling = workouts.reduce((s, w) => s + w.feeling, 0) / workouts.length;
@@ -83,6 +84,22 @@ function computeStreak(workouts: WorkoutEntry[], _startDate: string, currentDay:
     }
   }
   return streak;
+}
+
+// Returns one score per day from day 1 to currentDay
+export function computeScoreHistory(
+  workouts: WorkoutEntry[],
+  startDate: string,
+  currentDay: number,
+  restDays: string[] = [],
+): number[] {
+  const scores: number[] = [];
+  for (let day = 1; day <= currentDay; day++) {
+    const subset = workouts.filter(w => w.dayNumber <= day);
+    const score = computeFitnessScore(subset, startDate, day, restDays);
+    scores.push(score.total);
+  }
+  return scores;
 }
 
 export const WORKOUT_TYPES = [

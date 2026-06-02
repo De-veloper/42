@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
+import { initHealthKit } from './src/utils/healthKit';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text } from 'react-native';
@@ -9,11 +10,13 @@ import WelcomeScreen from './src/screens/WelcomeScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import LogWorkoutScreen from './src/screens/LogWorkoutScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
 
 export type RootStackParamList = {
   Welcome: undefined;
   Main: undefined;
   LogWorkout: { workout?: import('./src/utils/storage').WorkoutEntry } | undefined;
+  Settings: undefined;
 };
 
 export type TabParamList = {
@@ -57,6 +60,7 @@ function MainTabs() {
 }
 
 export default function App() {
+  useEffect(() => { initHealthKit(); }, []);
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <NavigationContainer>
@@ -64,6 +68,7 @@ export default function App() {
           <Stack.Screen name="Welcome" component={WelcomeScreen} />
           <Stack.Screen name="Main" component={MainTabs} />
           <Stack.Screen name="LogWorkout" component={LogWorkoutScreen} />
+          <Stack.Screen name="Settings" component={SettingsScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </GestureHandlerRootView>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 import {
   View,
   Text,
@@ -6,13 +6,13 @@ import {
   StyleSheet,
   Dimensions,
   StatusBar,
-} from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../../App';
+} from "react-native";
+import LinearGradient from "react-native-linear-gradient";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { RootStackParamList } from "../../App";
 
 interface Props {
-  navigation: NativeStackNavigationProp<RootStackParamList, 'Welcome'>;
+  navigation: NativeStackNavigationProp<RootStackParamList, "Welcome">;
 }
 
 export default function WelcomeScreen({ navigation }: Props) {
@@ -20,7 +20,7 @@ export default function WelcomeScreen({ navigation }: Props) {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <LinearGradient
-        colors={['#020B18', '#041428', '#020B18']}
+        colors={["#020B18", "#041428", "#020B18"]}
         style={styles.bg}
       />
 
@@ -32,7 +32,7 @@ export default function WelcomeScreen({ navigation }: Props) {
         {/* Logo */}
         <View style={styles.logoShadow}>
           <LinearGradient
-            colors={['#00BFFF', '#00E5CC', '#39FF14']}
+            colors={["#00BFFF", "#00E5CC", "#39FF14"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.logoContainer}
@@ -49,18 +49,18 @@ export default function WelcomeScreen({ navigation }: Props) {
 
         {/* Description */}
         <Text style={styles.description}>
-          Build a life-changing habit in 42 days.{'\n'}
-          Track every workout. Stay consistent.{'\n'}
+          Build a life-changing habit in 42 days.{"\n"}
+          Track every workout. Stay consistent.{"\n"}
           Transform yourself.
         </Text>
 
         {/* Stats row */}
         <View style={styles.statsRow}>
           {[
-            { value: '42', label: 'Days' },
-            { value: '6', label: 'Weeks' },
-            { value: '∞', label: 'Results' },
-          ].map(stat => (
+            { value: "42", label: "Days" },
+            { value: "6", label: "Weeks" },
+            { value: "∞", label: "Results" },
+          ].map((stat) => (
             <View key={stat.label} style={styles.statItem}>
               <Text style={styles.statValue}>{stat.value}</Text>
               <Text style={styles.statLabel}>{stat.label}</Text>
@@ -72,60 +72,61 @@ export default function WelcomeScreen({ navigation }: Props) {
         <View style={styles.btnWrapper}>
           <TouchableOpacity
             style={styles.btnInner}
-            onPress={() => navigation.navigate('Main')}
+            onPress={() => navigation.navigate("Main")}
             activeOpacity={0.85}
           >
             <LinearGradient
-              colors={['#00BFFF', '#00E5CC', '#39FF14']}
+              colors={["#00BFFF", "#00E5CC", "#39FF14"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
-              style={styles.btn}
-            >
-              <Text style={styles.btnText}>Start My 42 Days</Text>
-            </LinearGradient>
+              style={StyleSheet.absoluteFill}
+            />
+            <Text style={styles.btnText}>Start My 42 Days</Text>
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.footnote}>No equipment needed · Beginner friendly</Text>
+        <Text style={styles.footnote}>
+          No equipment needed · Beginner friendly
+        </Text>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#020B18' },
+  container: { flex: 1, backgroundColor: "#020B18" },
   bg: { ...StyleSheet.absoluteFill },
   glowTopLeft: {
-    position: 'absolute',
+    position: "absolute",
     top: -80,
     left: -80,
     width: 300,
     height: 300,
     borderRadius: 150,
-    backgroundColor: '#00BFFF',
+    backgroundColor: "#00BFFF",
     opacity: 0.06,
   },
   glowBottomRight: {
-    position: 'absolute',
+    position: "absolute",
     bottom: -100,
     right: -80,
     width: 350,
     height: 350,
     borderRadius: 175,
-    backgroundColor: '#39FF14',
+    backgroundColor: "#39FF14",
     opacity: 0.05,
   },
   content: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 32,
   },
   logoShadow: {
     marginBottom: 20,
     borderRadius: 24,
-    backgroundColor: '#00E5CC',
-    shadowColor: '#00E5CC',
+    backgroundColor: "#00E5CC",
+    shadowColor: "#00E5CC",
     shadowOpacity: 0.5,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 0 },
@@ -135,87 +136,87 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 24,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
   },
   logoText: {
     fontSize: 40,
-    fontWeight: '900',
-    color: '#020B18',
+    fontWeight: "900",
+    color: "#020B18",
     letterSpacing: -1,
   },
   title: {
     fontSize: 64,
-    fontWeight: '900',
-    color: '#00E5CC',
+    fontWeight: "900",
+    color: "#00E5CC",
     letterSpacing: 2,
   },
   subtitle: {
     fontSize: 16,
-    color: 'rgba(255,255,255,0.6)',
+    color: "rgba(255,255,255,0.6)",
     marginTop: 4,
     letterSpacing: 1,
   },
   divider: {
     width: 60,
     height: 2,
-    backgroundColor: '#00E5CC',
+    backgroundColor: "#00E5CC",
     borderRadius: 1,
     marginVertical: 24,
     opacity: 0.5,
   },
   description: {
     fontSize: 15,
-    color: 'rgba(255,255,255,0.7)',
-    textAlign: 'center',
+    color: "rgba(255,255,255,0.7)",
+    textAlign: "center",
     lineHeight: 24,
     marginBottom: 32,
   },
   statsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 32,
     marginBottom: 40,
   },
-  statItem: { alignItems: 'center' },
+  statItem: { alignItems: "center" },
   statValue: {
     fontSize: 28,
-    fontWeight: '800',
-    color: '#00E5CC',
+    fontWeight: "800",
+    color: "#00E5CC",
   },
   statLabel: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.5)',
+    color: "rgba(255,255,255,0.5)",
     letterSpacing: 1,
     marginTop: 2,
   },
   btnWrapper: {
-    width: '100%',
+    width: "100%",
     borderRadius: 16,
-    shadowColor: '#00E5CC',
+    shadowColor: "#00E5CC",
     shadowOpacity: 0.4,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 4 },
     elevation: 8,
   },
   btnInner: {
+    width: "100%",
     borderRadius: 16,
-    overflow: 'hidden',
-  },
-  btn: {
+    overflow: "hidden",
     paddingVertical: 18,
-    alignItems: 'center',
-    borderRadius: 16,
+    paddingHorizontal: 24,
+    alignItems: "center",
+    justifyContent: "center",
   },
   btnText: {
-    color: '#020B18',
+    color: "#020B18",
     fontSize: 17,
-    fontWeight: '800',
+    fontWeight: "800",
     letterSpacing: 0.5,
   },
   footnote: {
     marginTop: 16,
     fontSize: 13,
-    color: 'rgba(255,255,255,0.35)',
+    color: "rgba(255,255,255,0.35)",
   },
 });
