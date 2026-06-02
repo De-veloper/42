@@ -19,7 +19,6 @@ import {
   cancelReminders,
   getSavedReminderTime,
   saveReminderTime,
-  sendTestNotification,
   DEFAULT_HOUR,
 } from '../utils/notifications';
 import { resetMilestones } from '../utils/milestones';
@@ -128,16 +127,6 @@ export default function SettingsScreen({ navigation }: Props) {
               </TouchableOpacity>
             ))}
           </View>
-          <TouchableOpacity
-            style={styles.testBtn}
-            onPress={async () => {
-              await requestNotificationPermission();
-              await sendTestNotification();
-              Alert.alert('Test sent', 'Background the app — notification in 5 seconds.');
-            }}
-          >
-            <Text style={styles.testBtnText}>Send test notification</Text>
-          </TouchableOpacity>
         </View>
 
         {/* Program */}
@@ -233,15 +222,6 @@ const styles = StyleSheet.create({
   pillActive: { backgroundColor: 'rgba(0,229,204,0.15)', borderColor: '#00E5CC' },
   pillText: { color: 'rgba(255,255,255,0.45)', fontSize: 13, fontWeight: '600' },
   pillTextActive: { color: '#00E5CC' },
-  testBtn: {
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(0,229,204,0.25)',
-  },
-  testBtnText: { color: '#00E5CC', fontSize: 13, fontWeight: '600' },
-
   statusText: { fontSize: 15, color: '#fff', fontWeight: '600' },
 
   resetCard: {
