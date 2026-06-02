@@ -12,7 +12,7 @@ import {
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { resetAll, loadRestDays } from '../utils/storage';
+import { resetAll, loadRestDays, saveWorkout, saveStartDate, saveProgramStarted } from '../utils/storage';
 import {
   requestNotificationPermission,
   scheduleDailyReminder,
@@ -79,6 +79,65 @@ export default function SettingsScreen({ navigation }: Props) {
     );
   };
 
+  const handleLoadMockData = () => {
+    Alert.alert(
+      'Load Test Data',
+      'This will reset your current data and fill 42 days with sample workouts for testing. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Load Mock Data',
+          onPress: async () => {
+            await resetAll();
+            await resetMilestones();
+
+            // Start date = 42 days ago
+            const start = new Date();
+            start.setDate(start.getDate() - 41);
+            const fmt = (d: Date) =>
+              `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+            await saveStartDate(fmt(start));
+            await saveProgramStarted(true);
+
+            const types = ['Run','Gym','Ride','Walk','Yoga','Gym','Run','Swim'];
+            const notes = [
+              'Felt strong today!', 'Tough session but pushed through.',
+              'Beautiful morning run.', '', 'New personal best.',
+              '', 'Legs feeling heavy but showed up.', 'Easy recovery session.',
+            ];
+            // Skip days 6, 13, 20, 27, 34 (rest days — 5 rest days)
+            const restDays = new Set([6, 13, 20, 27, 34]);
+
+            for (let day = 1; day <= 42; day++) {
+              if (restDays.has(day)) continue;
+              const date = new Date(start);
+              date.setDate(start.getDate() + (day - 1));
+              const type = types[(day - 1) % types.length];
+              const duration = 20 + Math.floor(Math.sin(day * 0.4) * 15 + Math.random() * 25);
+              const feeling = Math.min(5, Math.max(1, 2 + Math.floor(day / 10) + (Math.random() > 0.7 ? 1 : 0)));
+              const note = day % 4 === 0 ? notes[day % notes.length] : '';
+              const distanceKm = (type === 'Run' || type === 'Ride') ? Math.round((duration * 0.12 + Math.random() * 2) * 100) / 100 : undefined;
+
+              await saveWorkout({
+                id: `mock-${day}-${Date.now()}`,
+                date: fmt(date),
+                dayNumber: day,
+                type,
+                duration,
+                feeling,
+                notes: note,
+                ...(distanceKm ? { distanceKm } : {}),
+              });
+            }
+
+            Alert.alert('Done!', '42 days of workouts loaded. Go explore the app!');
+          },
+        },
+      ]
+    );
+  };
+
   const hourLabel = (h: number) => h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`;
 
   return (
@@ -139,6 +198,17 @@ export default function SettingsScreen({ navigation }: Props) {
         </View>
 
         {/* Danger zone */}
+        {/* Developer tools — only visible in debug builds, hidden in App Store releases */}
+        {__DEV__ && (
+          <>
+            <Text style={[styles.sectionHeader, { color: '#8B5CF6' }]}>Developer</Text>
+            <TouchableOpacity style={styles.mockCard} onPress={handleLoadMockData} activeOpacity={0.8}>
+              <Text style={styles.mockTitle}>Load 42-Day Mock Data</Text>
+              <Text style={styles.mockSubtitle}>Fill the app with sample workouts to test all features.</Text>
+            </TouchableOpacity>
+          </>
+        )}
+
         <Text style={[styles.sectionHeader, { color: '#EF4444' }]}>Danger Zone</Text>
         <TouchableOpacity style={styles.resetCard} onPress={handleReset} activeOpacity={0.8}>
           <Text style={styles.resetTitle}>Reset Program</Text>
@@ -224,6 +294,15 @@ const styles = StyleSheet.create({
   pillTextActive: { color: '#00E5CC' },
   statusText: { fontSize: 15, color: '#fff', fontWeight: '600' },
 
+  mockCard: {
+    backgroundColor: 'rgba(139,92,246,0.08)',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(139,92,246,0.3)',
+  },
+  mockTitle: { fontSize: 15, fontWeight: '700', color: '#C4B5FD', marginBottom: 4 },
+  mockSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 18 },
   resetCard: {
     backgroundColor: 'rgba(239,68,68,0.08)',
     borderRadius: 16,

@@ -51,5 +51,5 @@ Start your 42-day transformation today.
 Keywords
 workout,log,tracker,habit,running,exercise,GPS,streak,health,training,progress,daily,distance
 
-Support URL (can be a simple webpage or GitHub page)
-Privacy Policy URL (required — even a simple one)
+Support URL (flying-riceball.com)
+Privacy Policy URL (https://www.termsfeed.com/live/bb54c7ff-134d-4808-bdc3-4906ff4546db)
