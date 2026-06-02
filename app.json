@@ -7,7 +7,13 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.FortyTwo",
+      "infoPlist": {
+        "NSCameraUsageDescription": "42 uses your camera to take workout selfies.",
+        "NSPhotoLibraryUsageDescription": "42 uses your photos to add workout photos.",
+        "NSPhotoLibraryAddUsageDescription": "42 saves workout photos to your photo library."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -20,6 +26,16 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "42 uses your photos to add workout photos.",
+          "cameraPermission": "42 uses your camera to take workout selfies."
+        }
+      ],
+      "expo-sharing"
+    ]
   }
 }

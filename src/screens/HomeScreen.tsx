@@ -1,0 +1,696 @@
+import React, { useState, useCallback, useRef } from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  StatusBar,
+} from "react-native";
+import LinearGradient from "react-native-linear-gradient";
+import ViewShot, { ViewShotRef } from "react-native-view-shot";
+import * as Sharing from "expo-sharing";
+import * as FileSystem from "expo-file-system/legacy";
+import { useFocusEffect } from "@react-navigation/native";
+import { CompositeNavigationProp } from "@react-navigation/native";
+import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { RootStackParamList, TabParamList } from "../../App";
+import CircularProgress from "../components/CircularProgress";
+import {
+  loadData,
+  loadWorkouts,
+  saveStartDate,
+  saveProgramStarted,
+  getDayNumber,
+  resetAll,
+  AppData,
+  WorkoutEntry,
+} from "../utils/storage";
+import {
+  computeFitnessScore,
+  FEELING_LABELS,
+  WORKOUT_TYPES,
+} from "../utils/fitnessScore";
+
+type Props = {
+  navigation: CompositeNavigationProp<
+    BottomTabNavigationProp<TabParamList, "Home">,
+    NativeStackNavigationProp<RootStackParamList>
+  >;
+};
+
+export default function HomeScreen({ navigation }: Props) {
+  const [data, setData] = useState<AppData>({
+    startDate: null,
+    completedDays: [],
+    programStarted: false,
+  });
+  const [workouts, setWorkouts] = useState<WorkoutEntry[]>([]);
+  const shareCardRef = useRef<ViewShotRef>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        const [appData, wks] = await Promise.all([loadData(), loadWorkouts()]);
+        setData(appData);
+        setWorkouts(wks);
+      })();
+    }, []),
+  );
+
+  const startProgram = async () => {
+    const d = new Date();
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    await saveStartDate(today);
+    await saveProgramStarted(true);
+    setData((prev) => ({ ...prev, startDate: today, programStarted: true }));
+  };
+
+  const handleReset = () => {
+    Alert.alert("Reset Program", "This clears all data. Are you sure?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Reset",
+        style: "destructive",
+        onPress: async () => {
+          await resetAll();
+          setData({
+            startDate: null,
+            completedDays: [],
+            programStarted: false,
+          });
+          setWorkouts([]);
+        },
+      },
+    ]);
+  };
+
+  const currentDay = data.startDate ? getDayNumber(data.startDate) : 0;
+  const completedCount = new Set(workouts.map((w) => w.dayNumber)).size;
+  const daysRemaining = Math.max(42 - currentDay, 0);
+  const progress = completedCount / 42;
+  const score = computeFitnessScore(workouts, data.startDate ?? "", currentDay);
+  const todayWorkouts = workouts.filter((w) => w.dayNumber === currentDay);
+  const lastWorkout = workouts[0] ?? null;
+  const isFinished = daysRemaining === 0;
+
+  const handleShare = async () => {
+    try {
+      const tempUri = await shareCardRef.current!.capture();
+      const destUri = FileSystem.documentDirectory + 'share-card.png';
+      await FileSystem.copyAsync({ from: tempUri, to: destUri });
+      await Sharing.shareAsync(destUri, { mimeType: 'image/png', dialogTitle: 'Share your progress' });
+    } catch {
+      Alert.alert('Could not share', 'Please try again.');
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      <LinearGradient
+        colors={["#020B18", "#041428", "#020B18"]}
+        style={styles.bg}
+      />
+      <View style={styles.glowTop} />
+
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.headerTitle}>42</Text>
+            <Text style={styles.headerDate}>
+              {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+            </Text>
+          </View>
+          <View style={styles.headerActions}>
+            <TouchableOpacity onPress={handleShare} style={styles.shareBtn}>
+              <Text style={styles.shareBtnText}>↑ Share</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleReset} style={styles.resetBtn}>
+              <Text style={styles.resetText}>Reset</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {!data.programStarted ? (
+          /* ── NOT STARTED ── */
+          <View style={styles.startContainer}>
+            <CircularProgress progress={0} currentDay={0} />
+            <Text style={styles.readyText}>Ready to Transform?</Text>
+            <Text style={styles.readySubtext}>
+              Commit to 42 days. Log every session.{"\n"}Watch your fitness
+              score climb.
+            </Text>
+            <TouchableOpacity
+              style={styles.primaryBtnWrapper}
+              onPress={startProgram}
+              activeOpacity={0.85}
+            >
+              <LinearGradient
+                colors={["#00BFFF", "#00E5CC", "#39FF14"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.primaryBtn}
+              >
+                <Text style={styles.primaryBtnText}>Begin Today</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          /* ── PROGRAM ACTIVE ── */
+          <>
+            {/* Progress ring */}
+            <View style={styles.ringSection}>
+              <CircularProgress progress={progress} currentDay={currentDay} />
+            </View>
+
+            {/* Days remaining + fitness score hero cards */}
+            <View style={styles.heroRow}>
+              {/* Days left */}
+              <LinearGradient
+                colors={["rgba(0,191,255,0.12)", "rgba(0,191,255,0.04)"]}
+                style={[styles.heroCard, styles.heroCardBorderBlue]}
+              >
+                <Text style={styles.heroValue}>{daysRemaining}</Text>
+                <Text style={styles.heroLabel}>Days Left</Text>
+                <Text style={styles.heroSub}>Day {currentDay} of 42</Text>
+              </LinearGradient>
+
+              {/* Fitness score */}
+              <LinearGradient
+                colors={[`${score.levelColor}22`, `${score.levelColor}08`]}
+                style={[
+                  styles.heroCard,
+                  { borderColor: `${score.levelColor}44` },
+                ]}
+              >
+                <Text style={[styles.heroValue, { color: score.levelColor }]}>
+                  {score.total}
+                </Text>
+                <Text style={styles.heroLabel}>Fitness Score</Text>
+                <Text style={[styles.heroSub, { color: score.levelColor }]}>
+                  {score.level}
+                </Text>
+              </LinearGradient>
+            </View>
+
+            {/* Streak badge */}
+            {score.streak > 1 && (
+              <View style={styles.streakBadge}>
+                <Text style={styles.streakText}>
+                  🔥 {score.streak}-day streak — keep it going!
+                </Text>
+              </View>
+            )}
+
+            {/* Completion banner */}
+            {isFinished && (
+              <View style={styles.completedBanner}>
+                <Text style={styles.completedEmoji}>🏆</Text>
+                <Text style={styles.completedTitle}>42 Days Complete!</Text>
+                <Text style={styles.completedSub}>
+                  Final score: {score.total} · {score.level}
+                </Text>
+              </View>
+            )}
+
+            {/* Today's log CTA */}
+            {!isFinished && (
+              <View style={styles.todaySection}>
+                <View style={styles.todayHeader}>
+                  <Text style={styles.sectionTitle}>
+                    Today — Day {currentDay}
+                  </Text>
+                  {todayWorkouts.length > 0 && (
+                    <Text style={styles.todayCount}>
+                      {todayWorkouts.length} logged
+                    </Text>
+                  )}
+                </View>
+
+                {todayWorkouts.length === 0 ? (
+                  <TouchableOpacity
+                    style={styles.primaryBtnWrapper}
+                    onPress={() => navigation.navigate("LogWorkout")}
+                    activeOpacity={0.85}
+                  >
+                    <LinearGradient
+                      colors={["#00BFFF", "#00E5CC", "#39FF14"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.primaryBtn}
+                    >
+                      <Text style={styles.primaryBtnText}>
+                        + Log Today's Workout
+                      </Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                ) : (
+                  <>
+                    {todayWorkouts.map((w) => (
+                      <TodayWorkoutRow key={w.id} workout={w} />
+                    ))}
+                    <TouchableOpacity
+                      style={styles.addMoreBtn}
+                      onPress={() => navigation.navigate("LogWorkout")}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={styles.addMoreText}>
+                        + Add another session
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+              </View>
+            )}
+
+            {/* Score breakdown mini */}
+            {workouts.length > 0 && (
+              <View style={styles.scoreCard}>
+                <Text style={styles.sectionTitle}>Progress Breakdown</Text>
+                {(
+                  [
+                    {
+                      label: "Consistency",
+                      value: score.consistency,
+                      hint: `${new Set(workouts.map((w) => w.date)).size} active days`,
+                    },
+                    {
+                      label: "Effort",
+                      value: score.effort,
+                      hint: `avg ${score.avgFeeling}/5 feeling`,
+                    },
+                    {
+                      label: "Volume",
+                      value: score.volume,
+                      hint: `avg ${score.avgDuration} min`,
+                    },
+                  ] as const
+                ).map((row) => (
+                  <View key={row.label} style={styles.scoreRow}>
+                    <View style={styles.scoreRowMeta}>
+                      <Text style={styles.scoreRowLabel}>{row.label}</Text>
+                      <Text style={styles.scoreRowHint}>{row.hint}</Text>
+                    </View>
+                    <View style={styles.scoreBarOuter}>
+                      <LinearGradient
+                        colors={["#00BFFF", "#39FF14"]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={[
+                          styles.scoreBarInner,
+                          { width: `${row.value}%` },
+                        ]}
+                      />
+                    </View>
+                    <Text style={styles.scoreValue}>{row.value}</Text>
+                  </View>
+                ))}
+
+                <View style={styles.totalScoreRow}>
+                  <Text style={styles.totalScoreLabel}>Total score</Text>
+                  <Text
+                    style={[
+                      styles.totalScoreValue,
+                      { color: score.levelColor },
+                    ]}
+                  >
+                    {score.total} / 100
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Last workout preview */}
+            {lastWorkout && lastWorkout.dayNumber !== currentDay && (
+              <View style={styles.lastWorkoutCard}>
+                <Text style={styles.sectionTitle}>Last Workout</Text>
+                <LastWorkoutRow workout={lastWorkout} />
+              </View>
+            )}
+          </>
+        )}
+      </ScrollView>
+
+      {/* Off-screen share card — captured by ViewShot */}
+      <ViewShot ref={shareCardRef} options={{ format: 'png', quality: 1 }} style={styles.shareCard}>
+        <View style={styles.shareCardBg}>
+          <Text style={styles.shareCardApp}>42</Text>
+          <Text style={styles.shareCardDay}>Day {currentDay} of 42</Text>
+          <View style={styles.shareCardRow}>
+            <View style={styles.shareCardStat}>
+              <Text style={styles.shareCardStatValue}>{score.total}</Text>
+              <Text style={styles.shareCardStatLabel}>Fitness Score</Text>
+            </View>
+            <View style={styles.shareCardDivider} />
+            <View style={styles.shareCardStat}>
+              <Text style={[styles.shareCardStatValue, { color: score.levelColor }]}>{score.level}</Text>
+              <Text style={styles.shareCardStatLabel}>Level</Text>
+            </View>
+            <View style={styles.shareCardDivider} />
+            <View style={styles.shareCardStat}>
+              <Text style={styles.shareCardStatValue}>{daysRemaining}</Text>
+              <Text style={styles.shareCardStatLabel}>Days Left</Text>
+            </View>
+          </View>
+          <Text style={styles.shareCardTag}>#42DayChallenge</Text>
+        </View>
+      </ViewShot>
+    </View>
+  );
+}
+
+function TodayWorkoutRow({ workout }: { workout: WorkoutEntry }) {
+  const icon =
+    WORKOUT_TYPES.find((t) => t.label === workout.type)?.icon ?? "⚡";
+  const feeling = FEELING_LABELS[workout.feeling];
+  return (
+    <View style={styles.todayRow}>
+      <Text style={styles.todayRowIcon}>{icon}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.todayRowType}>
+          {workout.type}{" "}
+          <Text style={styles.todayRowDuration}>{workout.duration} min</Text>
+        </Text>
+        {workout.notes ? (
+          <Text style={styles.todayRowNotes} numberOfLines={1}>
+            {workout.notes}
+          </Text>
+        ) : null}
+      </View>
+      <Text style={[styles.todayRowFeeling, { color: feeling.color }]}>
+        {feeling.emoji}
+      </Text>
+    </View>
+  );
+}
+
+function LastWorkoutRow({ workout }: { workout: WorkoutEntry }) {
+  const icon =
+    WORKOUT_TYPES.find((t) => t.label === workout.type)?.icon ?? "⚡";
+  const feeling = FEELING_LABELS[workout.feeling];
+  return (
+    <View style={styles.todayRow}>
+      <Text style={styles.todayRowIcon}>{icon}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.todayRowType}>
+          {workout.type}{" "}
+          <Text style={styles.todayRowDuration}>{workout.duration} min</Text>
+        </Text>
+        <Text style={styles.dayBadgeText}>Day {workout.dayNumber}</Text>
+      </View>
+      <Text style={[styles.todayRowFeeling, { color: feeling.color }]}>
+        {feeling.emoji} {feeling.label}
+      </Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#020B18" },
+  bg: { ...StyleSheet.absoluteFill },
+  glowTop: {
+    position: "absolute",
+    top: -120,
+    left: "50%",
+    marginLeft: -150,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: "#00BFFF",
+    opacity: 0.07,
+  },
+  scroll: { paddingBottom: 40 },
+
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 24,
+    paddingTop: 60,
+    paddingBottom: 12,
+  },
+  headerTitle: {
+    fontSize: 32,
+    fontWeight: "900",
+    color: "#00E5CC",
+    letterSpacing: 2,
+  },
+  headerDate: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.4)",
+    marginTop: 2,
+    letterSpacing: 0.3,
+  },
+  resetBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+  },
+  resetText: { color: "rgba(255,255,255,0.35)", fontSize: 13 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  shareBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0,229,204,0.4)',
+    backgroundColor: 'rgba(0,229,204,0.08)',
+  },
+  shareBtnText: { color: '#00E5CC', fontSize: 13, fontWeight: '700' },
+
+  // Share card (off-screen, captured by ViewShot)
+  shareCard: { position: 'absolute', left: -9999, top: 0, width: 400 },
+  shareCardBg: {
+    backgroundColor: '#020B18',
+    padding: 36,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0,229,204,0.2)',
+  },
+  shareCardApp: { fontSize: 52, fontWeight: '900', color: '#00E5CC', letterSpacing: 4, marginBottom: 4 },
+  shareCardDay: { fontSize: 16, color: 'rgba(255,255,255,0.5)', marginBottom: 28, letterSpacing: 1 },
+  shareCardRow: { flexDirection: 'row', alignItems: 'center', gap: 0, marginBottom: 28 },
+  shareCardStat: { alignItems: 'center', paddingHorizontal: 24 },
+  shareCardStatValue: { fontSize: 28, fontWeight: '900', color: '#00BFFF' },
+  shareCardStatLabel: { fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 4, letterSpacing: 0.5 },
+  shareCardDivider: { width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.1)' },
+  shareCardTag: { fontSize: 13, color: 'rgba(0,229,204,0.6)', letterSpacing: 1 },
+
+  // Start state
+  startContainer: {
+    alignItems: "center",
+    paddingTop: 16,
+    paddingHorizontal: 32,
+  },
+  readyText: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: "#fff",
+    marginTop: 32,
+    textAlign: "center",
+  },
+  readySubtext: {
+    fontSize: 15,
+    color: "rgba(255,255,255,0.55)",
+    textAlign: "center",
+    lineHeight: 24,
+    marginTop: 12,
+    marginBottom: 36,
+  },
+
+  // Primary button
+  primaryBtnWrapper: {
+    width: "100%",
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: "#00E5CC",
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  primaryBtn: { paddingVertical: 18, alignItems: "center", borderRadius: 16 },
+  primaryBtnText: { color: "#020B18", fontSize: 17, fontWeight: "800" },
+
+  // Ring
+  ringSection: { alignItems: "center", paddingTop: 0, paddingBottom: 0 },
+
+  // Hero cards
+  heroRow: {
+    flexDirection: "row",
+    gap: 12,
+    paddingHorizontal: 24,
+    marginTop: 16,
+  },
+  heroCard: {
+    flex: 1,
+    borderRadius: 18,
+    paddingTop: 10,
+    paddingBottom: 14,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(0,191,255,0.2)",
+  },
+  heroCardBorderBlue: { borderColor: "rgba(0,191,255,0.3)" },
+  heroValue: { fontSize: 38, fontWeight: "900", color: "#00BFFF" },
+  heroLabel: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.5)",
+    marginTop: 2,
+    letterSpacing: 0.5,
+  },
+  heroSub: { fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 3 },
+
+  // Streak
+  streakBadge: {
+    marginHorizontal: 24,
+    marginTop: 14,
+    backgroundColor: "rgba(255,160,0,0.12)",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,160,0,0.25)",
+  },
+  streakText: { color: "#FFA500", fontSize: 13, fontWeight: "600" },
+
+  // Completed banner
+  completedBanner: {
+    marginHorizontal: 24,
+    marginTop: 16,
+    backgroundColor: "rgba(0,229,204,0.08)",
+    borderRadius: 16,
+    padding: 20,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(0,229,204,0.25)",
+  },
+  completedEmoji: { fontSize: 36 },
+  completedTitle: {
+    color: "#00E5CC",
+    fontSize: 20,
+    fontWeight: "800",
+    marginTop: 8,
+  },
+  completedSub: { color: "rgba(255,255,255,0.5)", fontSize: 14, marginTop: 4 },
+
+  // Today section
+  todaySection: { paddingHorizontal: 24, marginTop: 24 },
+  todayHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  todayCount: { color: "#00E5CC", fontSize: 13, fontWeight: "600" },
+
+  todayRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    gap: 12,
+  },
+  todayRowIcon: { fontSize: 22 },
+  todayRowType: { fontSize: 15, fontWeight: "700", color: "#fff" },
+  todayRowDuration: { color: "#00E5CC", fontWeight: "700" },
+  todayRowNotes: { color: "rgba(255,255,255,0.4)", fontSize: 12, marginTop: 2 },
+  todayRowFeeling: { fontSize: 14, fontWeight: "600" },
+  dayBadgeText: {
+    color: "#00BFFF",
+    fontSize: 11,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+
+  addMoreBtn: {
+    paddingVertical: 12,
+    alignItems: "center",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(0,229,204,0.25)",
+    borderStyle: "dashed",
+  },
+  addMoreText: { color: "#00E5CC", fontSize: 14, fontWeight: "600" },
+
+  // Score card
+  scoreCard: {
+    marginHorizontal: 24,
+    marginTop: 24,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.07)",
+  },
+  scoreRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+    gap: 10,
+  },
+  scoreRowMeta: { width: 90 },
+  scoreRowLabel: {
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  scoreRowHint: { color: "rgba(255,255,255,0.3)", fontSize: 10, marginTop: 1 },
+  scoreBarOuter: {
+    flex: 1,
+    height: 6,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  scoreBarInner: { height: "100%", borderRadius: 3 },
+  scoreValue: {
+    color: "rgba(255,255,255,0.45)",
+    fontSize: 12,
+    width: 26,
+    textAlign: "right",
+  },
+  totalScoreRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.08)",
+    marginTop: 4,
+  },
+  totalScoreLabel: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  totalScoreValue: { fontSize: 16, fontWeight: "800" },
+
+  // Last workout
+  lastWorkoutCard: {
+    marginHorizontal: 24,
+    marginTop: 20,
+  },
+
+  sectionTitle: {
+    color: "rgba(255,255,255,0.45)",
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+    marginBottom: 10,
+  },
+});

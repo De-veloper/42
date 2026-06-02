@@ -1,20 +1,71 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import React from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { Text } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-export default function App() {
+import WelcomeScreen from './src/screens/WelcomeScreen';
+import HomeScreen from './src/screens/HomeScreen';
+import HistoryScreen from './src/screens/HistoryScreen';
+import LogWorkoutScreen from './src/screens/LogWorkoutScreen';
+
+export type RootStackParamList = {
+  Welcome: undefined;
+  Main: undefined;
+  LogWorkout: { workout?: import('./src/utils/storage').WorkoutEntry } | undefined;
+};
+
+export type TabParamList = {
+  Home: undefined;
+  History: undefined;
+};
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
+const Tab = createBottomTabNavigator<TabParamList>();
+
+function MainTabs() {
   return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarActiveTintColor: '#00E5CC',
+        tabBarInactiveTintColor: 'rgba(255,255,255,0.4)',
+        tabBarStyle: {
+          backgroundColor: '#041428',
+          borderTopWidth: 1,
+          borderTopColor: 'rgba(0,229,204,0.2)',
+          height: 72,
+          paddingBottom: 10,
+          paddingTop: 8,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '700',
+          letterSpacing: 0.3,
+        },
+        tabBarIcon: ({ color }) => {
+          const icon = route.name === 'Home' ? '🏠' : '📋';
+          return <Text style={{ fontSize: 22 }}>{icon}</Text>;
+        },
+      })}
+    >
+      <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: 'Home' }} />
+      <Tab.Screen name="History" component={HistoryScreen} options={{ tabBarLabel: 'History' }} />
+    </Tab.Navigator>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+export default function App() {
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <NavigationContainer>
+        <Stack.Navigator initialRouteName="Welcome" screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="Welcome" component={WelcomeScreen} />
+          <Stack.Screen name="Main" component={MainTabs} />
+          <Stack.Screen name="LogWorkout" component={LogWorkoutScreen} />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </GestureHandlerRootView>
+  );
+}
