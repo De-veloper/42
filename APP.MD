@@ -53,3 +53,5 @@ workout,log,tracker,habit,running,exercise,GPS,streak,health,training,progress,d
 
 Support URL (flying-riceball.com)
 Privacy Policy URL (https://www.termsfeed.com/live/bb54c7ff-134d-4808-bdc3-4906ff4546db)
+
+https://youtube.com/shorts/Mwa9d9qy_WY?si=wT1x-u0BmzTB2qS_
