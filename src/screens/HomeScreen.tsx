@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   ScrollView,
   Alert,
   StatusBar,
+  Modal,
 } from "react-native";
 import LinearGradient from "react-native-linear-gradient";
 import ViewShot, { ViewShotRef } from "react-native-view-shot";
@@ -18,6 +19,23 @@ import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList, TabParamList } from "../../App";
 import CircularProgress from "../components/CircularProgress";
+import {
+  requestNotificationPermission,
+  scheduleDailyReminder,
+  cancelReminders,
+  getSavedReminderTime,
+  saveReminderTime,
+  sendTestNotification,
+  DEFAULT_HOUR,
+} from "../utils/notifications";
+import {
+  ALL_MILESTONES,
+  Milestone,
+  getUnlockedIds,
+  getSeenMilestones,
+  markMilestonesSeen,
+  resetMilestones,
+} from "../utils/milestones";
 import {
   loadData,
   loadWorkouts,
@@ -48,7 +66,15 @@ export default function HomeScreen({ navigation }: Props) {
     programStarted: false,
   });
   const [workouts, setWorkouts] = useState<WorkoutEntry[]>([]);
+  const [reminderHour, setReminderHour] = useState(DEFAULT_HOUR);
+  const [showReminderModal, setShowReminderModal] = useState(false);
+  const [newMilestone, setNewMilestone] = useState<Milestone | null>(null);
+  const [unlockedIds, setUnlockedIds] = useState<string[]>([]);
   const shareCardRef = useRef<ViewShotRef>(null);
+
+  useEffect(() => {
+    getSavedReminderTime().then(({ hour }) => setReminderHour(hour));
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -66,6 +92,14 @@ export default function HomeScreen({ navigation }: Props) {
     await saveStartDate(today);
     await saveProgramStarted(true);
     setData((prev) => ({ ...prev, startDate: today, programStarted: true }));
+    const granted = await requestNotificationPermission();
+    if (granted) await scheduleDailyReminder(reminderHour, 0);
+  };
+
+  const handleChangeReminder = async (hour: number) => {
+    setReminderHour(hour);
+    await saveReminderTime(hour, 0);
+    if (data.programStarted) await scheduleDailyReminder(hour, 0);
   };
 
   const handleReset = () => {
@@ -76,12 +110,11 @@ export default function HomeScreen({ navigation }: Props) {
         style: "destructive",
         onPress: async () => {
           await resetAll();
-          setData({
-            startDate: null,
-            completedDays: [],
-            programStarted: false,
-          });
+          await cancelReminders();
+          await resetMilestones();
+          setData({ startDate: null, completedDays: [], programStarted: false });
           setWorkouts([]);
+          setUnlockedIds([]);
         },
       },
     ]);
@@ -95,6 +128,22 @@ export default function HomeScreen({ navigation }: Props) {
   const todayWorkouts = workouts.filter((w) => w.dayNumber === currentDay);
   const lastWorkout = workouts[0] ?? null;
   const isFinished = daysRemaining === 0;
+
+  // Check for newly unlocked milestones
+  useEffect(() => {
+    if (!data.programStarted || workouts.length === 0) return;
+    (async () => {
+      const unlocked = getUnlockedIds(workouts, currentDay, score);
+      setUnlockedIds(unlocked);
+      const seen = await getSeenMilestones();
+      const newlyUnlocked = unlocked.filter(id => !seen.includes(id));
+      if (newlyUnlocked.length > 0) {
+        const milestone = ALL_MILESTONES.find(m => m.id === newlyUnlocked[0])!;
+        setNewMilestone(milestone);
+        await markMilestonesSeen(newlyUnlocked);
+      }
+    })();
+  }, [workouts, currentDay, score.streak]);
 
   const handleShare = async () => {
     try {
@@ -132,6 +181,9 @@ export default function HomeScreen({ navigation }: Props) {
             <TouchableOpacity onPress={handleShare} style={styles.shareBtn}>
               <Text style={styles.shareBtnText}>↑ Share</Text>
             </TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowReminderModal(true)} style={styles.bellBtn}>
+              <Text style={styles.bellBtnText}>🔔</Text>
+            </TouchableOpacity>
             <TouchableOpacity onPress={handleReset} style={styles.resetBtn}>
               <Text style={styles.resetText}>Reset</Text>
             </TouchableOpacity>
@@ -147,6 +199,36 @@ export default function HomeScreen({ navigation }: Props) {
               Commit to 42 days. Log every session.{"\n"}Watch your fitness
               score climb.
             </Text>
+
+            {/* Reminder time picker */}
+            <View style={styles.reminderRow}>
+              <View style={styles.reminderLabelRow}>
+                <Text style={styles.reminderLabel}>🔔 Daily reminder</Text>
+                <TouchableOpacity
+                  onPress={async () => {
+                    await requestNotificationPermission();
+                    await sendTestNotification();
+                    Alert.alert('Test sent', 'You\'ll see a notification in 5 seconds — background the app first.');
+                  }}
+                >
+                  <Text style={styles.reminderTestBtn}>Test</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.reminderPills}>
+                {[7, 12, 18, 20].map(h => (
+                  <TouchableOpacity
+                    key={h}
+                    style={[styles.reminderPill, reminderHour === h && styles.reminderPillActive]}
+                    onPress={() => handleChangeReminder(h)}
+                  >
+                    <Text style={[styles.reminderPillText, reminderHour === h && styles.reminderPillTextActive]}>
+                      {h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
             <TouchableOpacity
               style={styles.primaryBtnWrapper}
               onPress={startProgram}
@@ -327,6 +409,22 @@ export default function HomeScreen({ navigation }: Props) {
               </View>
             )}
 
+            {/* Milestone badges */}
+            <View style={styles.badgesSection}>
+              <Text style={styles.sectionTitle}>Achievements</Text>
+              <View style={styles.badgesGrid}>
+                {ALL_MILESTONES.map(m => {
+                  const unlocked = unlockedIds.includes(m.id);
+                  return (
+                    <View key={m.id} style={[styles.badgePill, unlocked && styles.badgePillUnlocked]}>
+                      <Text style={[styles.badgeEmoji, !unlocked && { opacity: 0.3 }]}>{m.emoji}</Text>
+                      <Text style={[styles.badgeLabel, unlocked && styles.badgeLabelUnlocked]}>{m.title}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+
             {/* Last workout preview */}
             {lastWorkout && lastWorkout.dayNumber !== currentDay && (
               <View style={styles.lastWorkoutCard}>
@@ -334,9 +432,59 @@ export default function HomeScreen({ navigation }: Props) {
                 <LastWorkoutRow workout={lastWorkout} />
               </View>
             )}
+
           </>
         )}
       </ScrollView>
+
+      {/* Milestone celebration modal */}
+      <Modal visible={!!newMilestone} transparent animationType="fade" onRequestClose={() => setNewMilestone(null)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setNewMilestone(null)}>
+          <View style={styles.milestoneCard}>
+            <Text style={styles.milestoneEmoji}>{newMilestone?.emoji}</Text>
+            <Text style={styles.milestoneUnlocked}>Achievement Unlocked!</Text>
+            <Text style={styles.milestoneTitle}>{newMilestone?.title}</Text>
+            <Text style={styles.milestoneDesc}>{newMilestone?.description}</Text>
+            <TouchableOpacity style={styles.milestoneDismiss} onPress={() => setNewMilestone(null)}>
+              <Text style={styles.milestoneDismissText}>Nice! 🎉</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Reminder modal */}
+      <Modal visible={showReminderModal} transparent animationType="fade" onRequestClose={() => setShowReminderModal(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowReminderModal(false)}>
+          <View style={styles.modalCard} onStartShouldSetResponder={() => true}>
+            <Text style={styles.modalTitle}>🔔 Daily Reminder</Text>
+            <Text style={styles.modalSubtitle}>Pick what time to log your workout</Text>
+            <View style={styles.reminderPills}>
+              {[7, 12, 18, 20].map(h => (
+                <TouchableOpacity
+                  key={h}
+                  style={[styles.reminderPill, reminderHour === h && styles.reminderPillActive]}
+                  onPress={() => handleChangeReminder(h)}
+                >
+                  <Text style={[styles.reminderPillText, reminderHour === h && styles.reminderPillTextActive]}>
+                    {h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity
+              style={styles.modalTestBtn}
+              onPress={async () => {
+                await requestNotificationPermission();
+                await sendTestNotification();
+                setShowReminderModal(false);
+                Alert.alert('Test sent', 'Background the app — notification arrives in 5 seconds.');
+              }}
+            >
+              <Text style={styles.modalTestBtnText}>Send test notification</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Off-screen share card — captured by ViewShot */}
       <ViewShot ref={shareCardRef} options={{ format: 'png', quality: 1 }} style={styles.shareCard}>
@@ -484,6 +632,137 @@ const styles = StyleSheet.create({
   shareCardStatLabel: { fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 4, letterSpacing: 0.5 },
   shareCardDivider: { width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.1)' },
   shareCardTag: { fontSize: 13, color: 'rgba(0,229,204,0.6)', letterSpacing: 1 },
+
+  // Reminder time picker
+  reminderRow: {
+    width: '100%',
+    marginBottom: 24,
+  },
+  reminderLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
+  reminderTestBtn: { color: '#00E5CC', fontSize: 12, fontWeight: '700', opacity: 0.7 },
+  reminderLabel: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  reminderPills: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  reminderPill: {
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  reminderPillActive: {
+    backgroundColor: 'rgba(0,229,204,0.15)',
+    borderColor: '#00E5CC',
+  },
+  reminderPillText: { color: 'rgba(255,255,255,0.45)', fontSize: 13, fontWeight: '600' },
+  reminderPillTextActive: { color: '#00E5CC' },
+
+  // Bell button
+  bellBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  bellBtnText: { fontSize: 16 },
+
+  // Reminder modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  modalCard: {
+    width: '100%',
+    backgroundColor: '#041428',
+    borderRadius: 24,
+    padding: 28,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0,229,204,0.2)',
+  },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: '#fff', marginBottom: 6 },
+  modalSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.45)', marginBottom: 24 },
+  modalTestBtn: {
+    marginTop: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0,229,204,0.3)',
+  },
+  modalTestBtnText: { color: '#00E5CC', fontSize: 13, fontWeight: '600' },
+
+  // Milestone celebration modal
+  milestoneCard: {
+    width: '85%',
+    backgroundColor: '#041428',
+    borderRadius: 28,
+    padding: 32,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0,229,204,0.3)',
+  },
+  milestoneEmoji: { fontSize: 64, marginBottom: 12 },
+  milestoneUnlocked: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#00E5CC',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  milestoneTitle: { fontSize: 24, fontWeight: '900', color: '#fff', marginBottom: 8, textAlign: 'center' },
+  milestoneDesc: { fontSize: 14, color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginBottom: 24 },
+  milestoneDismiss: {
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,229,204,0.12)',
+    borderWidth: 1,
+    borderColor: '#00E5CC',
+  },
+  milestoneDismissText: { color: '#00E5CC', fontSize: 16, fontWeight: '700' },
+
+  // Milestone badges grid
+  badgesSection: { paddingHorizontal: 24, marginTop: 24 },
+  badgesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10 },
+  badgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  badgePillUnlocked: {
+    backgroundColor: 'rgba(0,229,204,0.1)',
+    borderColor: 'rgba(0,229,204,0.35)',
+  },
+  badgeEmoji: { fontSize: 16 },
+  badgeLabel: { fontSize: 12, color: 'rgba(255,255,255,0.3)', fontWeight: '600' },
+  badgeLabelUnlocked: { color: '#00E5CC' },
 
   // Start state
   startContainer: {

@@ -30,14 +30,16 @@ export default function WelcomeScreen({ navigation }: Props) {
 
       <View style={styles.content}>
         {/* Logo */}
-        <LinearGradient
-          colors={['#00BFFF', '#00E5CC', '#39FF14']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.logoContainer}
-        >
-          <Text style={styles.logoText}>42</Text>
-        </LinearGradient>
+        <View style={styles.logoShadow}>
+          <LinearGradient
+            colors={['#00BFFF', '#00E5CC', '#39FF14']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.logoContainer}
+          >
+            <Text style={styles.logoText}>42</Text>
+          </LinearGradient>
+        </View>
 
         {/* Title */}
         <Text style={styles.title}>42</Text>
@@ -67,20 +69,22 @@ export default function WelcomeScreen({ navigation }: Props) {
         </View>
 
         {/* CTA */}
-        <TouchableOpacity
-          style={styles.btnWrapper}
-          onPress={() => navigation.navigate('Main')}
-          activeOpacity={0.85}
-        >
-          <LinearGradient
-            colors={['#00BFFF', '#00E5CC', '#39FF14']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.btn}
+        <View style={styles.btnWrapper}>
+          <TouchableOpacity
+            style={styles.btnInner}
+            onPress={() => navigation.navigate('Main')}
+            activeOpacity={0.85}
           >
-            <Text style={styles.btnText}>Start My 42 Days</Text>
-          </LinearGradient>
-        </TouchableOpacity>
+            <LinearGradient
+              colors={['#00BFFF', '#00E5CC', '#39FF14']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.btn}
+            >
+              <Text style={styles.btnText}>Start My 42 Days</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
 
         <Text style={styles.footnote}>No equipment needed · Beginner friendly</Text>
       </View>
@@ -117,19 +121,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 32,
   },
-  logoContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 24,
-    overflow: 'hidden',
+  logoShadow: {
     marginBottom: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: 24,
+    backgroundColor: '#00E5CC',
     shadowColor: '#00E5CC',
     shadowOpacity: 0.5,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 0 },
     elevation: 10,
+  },
+  logoContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 24,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   logoText: {
     fontSize: 40,
@@ -184,12 +192,15 @@ const styles = StyleSheet.create({
   btnWrapper: {
     width: '100%',
     borderRadius: 16,
-    overflow: 'hidden',
     shadowColor: '#00E5CC',
     shadowOpacity: 0.4,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 4 },
     elevation: 8,
+  },
+  btnInner: {
+    borderRadius: 16,
+    overflow: 'hidden',
   },
   btn: {
     paddingVertical: 18,
