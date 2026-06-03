@@ -5,17 +5,20 @@
 
 ## 🏃 Journey Paths (Post-42)
 
-- After completing Day 42, show a "What's Next?" screen with final stats
-- Change km to mi on GPS
-- User picks a goal-based path based on their workout history:
+- ✅ After completing Day 42, show a "What's Next?" screen with final stats
+- ✅ Change km to mi on GPS
+- ✅ User picks a goal-based path based on their workout history:
   - 🏃 Run a 5K — 8 weeks, 3 runs/week
   - 🚴 Ride 50km — 6 weeks, builds distance weekly
   - 🏊 Swim 1km — 6 weeks
   - 💪 Strength Base — 8 weeks
   - 🧘 Flexibility — 4 weeks daily
 - App auto-suggests path matching most-logged workout type
-- Each path has weekly targets, progress bar, and completion share card
-- "Start Again" button on completion banner to restart the 42-day challenge
+- ✅ Each path has weekly targets, progress bar, and completion share card
+- ✅ "Start Again" button on completion banner to restart the 42-day challenge
+- ✅ If user enter their name, home page should show hi name
+- ✅ home UI consistency is cut
+- ✅ can user go back to select second sport
 
 ## 🏥 HealthKit (iOS)
 
@@ -37,6 +40,14 @@
 - Android GPS foreground service notification styling
 - Test GPS tracking on physical Android device
 - What happens after Day 42 — add "Start Again" or "What's Next" flow
+
+## 🤖 AI Coach Integration (v2)
+
+- Bring in AI coach (from ai-coach project) to give personalised workout advice
+- Tap "Ask AI Coach" from the home screen or path progress screen
+- Coach reads your workout history, fitness score, active paths, and rest days
+- Suggests when to rest, when to push harder, tailored to your pace
+- Eventually: auto-suggest next path based on your performance patterns
 
 ## 📈 Lifetime Score (v2)
 
