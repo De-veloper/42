@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "FortyTwo",
+    "name": "42",
     "slug": "FortyTwo",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -22,7 +22,7 @@
     },
     "android": {
       "package": "com.fortytwo.challenge",
-      "versionCode": 4,
+      "versionCode": 5,
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundColor": "#020B18"
