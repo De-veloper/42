@@ -13,7 +13,7 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.anonymous.FortyTwo",
+      "bundleIdentifier": "com.flying-riceball.FortyTwo",
       "infoPlist": {
         "NSCameraUsageDescription": "42 uses your camera to take workout selfies.",
         "NSPhotoLibraryUsageDescription": "42 uses your photos to add workout photos.",
@@ -67,7 +67,7 @@
         {
           "sounds": []
         }
-      ],
+      ]
     ]
   }
 }
