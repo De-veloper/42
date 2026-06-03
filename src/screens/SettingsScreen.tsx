@@ -117,7 +117,7 @@ export default function SettingsScreen({ navigation }: Props) {
               const duration = 20 + Math.floor(Math.sin(day * 0.4) * 15 + Math.random() * 25);
               const feeling = Math.min(5, Math.max(1, 2 + Math.floor(day / 10) + (Math.random() > 0.7 ? 1 : 0)));
               const note = day % 4 === 0 ? notes[day % notes.length] : '';
-              const distanceKm = (type === 'Run' || type === 'Ride') ? Math.round((duration * 0.12 + Math.random() * 2) * 100) / 100 : undefined;
+              const distanceMi = (type === 'Run' || type === 'Ride') ? Math.round((duration * 0.075 + Math.random() * 1.5) * 100) / 100 : undefined;
 
               await saveWorkout({
                 id: `mock-${day}-${Date.now()}`,
@@ -127,11 +127,63 @@ export default function SettingsScreen({ navigation }: Props) {
                 duration,
                 feeling,
                 notes: note,
-                ...(distanceKm ? { distanceKm } : {}),
+                ...(distanceMi ? { distanceMi } : {}),
               });
             }
 
             Alert.alert('Done!', '42 days of workouts loaded. Go explore the app!');
+          },
+        },
+      ]
+    );
+  };
+
+  const handleLoadWeeksMockData = () => {
+    Alert.alert(
+      'Load 2-Week Sample',
+      'Resets data and loads 2 weeks of workouts — good for testing the progress chart mid-journey.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Load',
+          onPress: async () => {
+            await resetAll();
+            await resetMilestones();
+
+            const DAYS = 14;
+            const start = new Date();
+            start.setDate(start.getDate() - (DAYS - 1));
+            const fmt = (d: Date) =>
+              `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+            await saveStartDate(fmt(start));
+            await saveProgramStarted(true);
+
+            const types = ['Run','Gym','Walk','Run','Gym','Ride','Yoga'];
+            const restDays = new Set([4, 7, 11]);
+
+            for (let day = 1; day <= DAYS; day++) {
+              if (restDays.has(day)) continue;
+              const date = new Date(start);
+              date.setDate(start.getDate() + (day - 1));
+              const type = types[(day - 1) % types.length];
+              const duration = 25 + Math.floor(Math.random() * 25);
+              const feeling = 3 + Math.floor(day / 6);
+              const distanceMi = (type === 'Run' || type === 'Ride')
+                ? Math.round((duration * 0.075 + Math.random()) * 100) / 100
+                : undefined;
+              await saveWorkout({
+                id: `mock2w-${day}-${Date.now()}`,
+                date: fmt(date),
+                dayNumber: day,
+                type,
+                duration,
+                feeling: Math.min(feeling, 5),
+                notes: '',
+                ...(distanceMi ? { distanceMi } : {}),
+              });
+            }
+            Alert.alert('Done!', '2 weeks of workouts loaded.');
           },
         },
       ]
@@ -202,9 +254,14 @@ export default function SettingsScreen({ navigation }: Props) {
         {__DEV__ && (
           <>
             <Text style={[styles.sectionHeader, { color: '#8B5CF6' }]}>Developer</Text>
+            <TouchableOpacity style={styles.mockCard} onPress={handleLoadWeeksMockData} activeOpacity={0.8}>
+              <Text style={styles.mockTitle}>Load 2-Week Sample</Text>
+              <Text style={styles.mockSubtitle}>14 days of workouts — test progress chart mid-journey.</Text>
+            </TouchableOpacity>
+            <View style={{ height: 10 }} />
             <TouchableOpacity style={styles.mockCard} onPress={handleLoadMockData} activeOpacity={0.8}>
-              <Text style={styles.mockTitle}>Load 42-Day Mock Data</Text>
-              <Text style={styles.mockSubtitle}>Fill the app with sample workouts to test all features.</Text>
+              <Text style={styles.mockTitle}>Load Full 42-Day Mock</Text>
+              <Text style={styles.mockSubtitle}>Complete 42 days — test milestones, completion screen, Journey Paths.</Text>
             </TouchableOpacity>
           </>
         )}

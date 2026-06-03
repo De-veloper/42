@@ -33,8 +33,8 @@ TaskManager.defineTask(LOCATION_TASK, ({ data, error }: any) => {
 
 // ── Geo math ──────────────────────────────────────────────────────────────────
 
-export function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371;
+export function haversineMi(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 3958.8; // miles
   const toRad = (d: number) => (d * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
   const dLon = toRad(lon2 - lon1);
@@ -44,11 +44,11 @@ export function haversineKm(lat1: number, lon1: number, lat2: number, lon2: numb
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-export function computeDistanceKm(pts: LocationPoint[]): number {
+export function computeDistanceMi(pts: LocationPoint[]): number {
   let d = 0;
   for (let i = 1; i < pts.length; i++) {
-    const step = haversineKm(pts[i - 1].lat, pts[i - 1].lon, pts[i].lat, pts[i].lon);
-    if (step < 0.15) d += step; // ignore GPS noise jumps
+    const step = haversineMi(pts[i - 1].lat, pts[i - 1].lon, pts[i].lat, pts[i].lon);
+    if (step < 0.1) d += step; // ignore GPS noise jumps (0.1 mi ≈ 160m)
   }
   return d;
 }

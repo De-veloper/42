@@ -25,7 +25,7 @@ export interface WorkoutEntry {
   photoUri?: string;
   heartRateAvg?: number;
   calories?: number;
-  distanceKm?: number;
+  distanceMi?: number;
 }
 
 export async function loadData(): Promise<AppData> {
@@ -124,7 +124,7 @@ export function getDayNumber(startDate: string): number {
   start.setHours(0, 0, 0, 0);
   today.setHours(0, 0, 0, 0);
   const diff = Math.floor((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-  return Math.min(Math.max(diff + 1, 1), 42);
+  return Math.max(diff + 1, 1);
 }
 
 export function getDaysRemaining(startDate: string): number {

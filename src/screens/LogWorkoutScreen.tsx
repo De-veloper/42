@@ -20,13 +20,14 @@ import { RootStackParamList } from '../../App';
 import { saveWorkout, updateWorkout, loadData, getDayNumber, todayString, WorkoutEntry } from '../utils/storage';
 import { WORKOUT_TYPES, FEELING_LABELS } from '../utils/fitnessScore';
 import { isReady, saveWorkoutToHealth, fetchWorkoutData } from '../utils/healthKit';
+import { logPathSession } from '../utils/paths';
 import {
   requestLocationPermissions,
   startGpsTracking,
   stopGpsTracking,
   getGpsSnapshot,
   clearGpsRun,
-  computeDistanceKm,
+  computeDistanceMi,
   computeElapsedMs,
   formatElapsed,
 } from '../utils/gps';
@@ -38,7 +39,8 @@ interface Props {
 
 export default function LogWorkoutScreen({ navigation, route }: Props) {
   const existing = route.params?.workout;
-  const [workoutType, setWorkoutType] = useState(existing?.type ?? 'Run');
+  const pathWorkoutType = route.params?.pathWorkoutType;
+  const [workoutType, setWorkoutType] = useState(existing?.type ?? pathWorkoutType ?? 'Run');
   const [duration, setDuration] = useState(existing ? String(existing.duration) : '');
   const [feeling, setFeeling] = useState<number>(existing?.feeling ?? 3);
   const [notes, setNotes] = useState(existing?.notes ?? '');
@@ -49,7 +51,7 @@ export default function LogWorkoutScreen({ navigation, route }: Props) {
 
   // GPS
   const [gpsState, setGpsState] = useState<'idle' | 'tracking' | 'done'>('idle');
-  const [distanceKm, setDistanceKm] = useState(0);
+  const [distanceMi, setDistanceKm] = useState(0);
   const [elapsedMs, setElapsedMs] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -73,7 +75,7 @@ export default function LogWorkoutScreen({ navigation, route }: Props) {
     pollRef.current = setInterval(async () => {
       const snap = await getGpsSnapshot();
       if (!snap) return;
-      setDistanceKm(computeDistanceKm(snap.locations));
+      setDistanceKm(computeDistanceMi(snap.locations));
       setElapsedMs(computeElapsedMs(snap));
     }, 1000);
   };
@@ -85,7 +87,7 @@ export default function LogWorkoutScreen({ navigation, route }: Props) {
     const capturedElapsed = liveSnap ? computeElapsedMs(liveSnap) : elapsedMs;
     const snap = await stopGpsTracking();
     if (snap) {
-      const km = computeDistanceKm(snap.locations);
+      const km = computeDistanceMi(snap.locations);
       const mins = Math.ceil(capturedElapsed / 60000); // ceil so 1m5s → 2min
       setDistanceKm(km);
       setElapsedMs(capturedElapsed);
@@ -165,7 +167,7 @@ export default function LogWorkoutScreen({ navigation, route }: Props) {
     setSaving(true);
     try {
       const photoField = photoUri ? { photoUri } : {};
-      const gpsField = gpsState === 'done' && distanceKm > 0 ? { distanceKm: Math.round(distanceKm * 100) / 100 } : {};
+      const gpsField = gpsState === 'done' && distanceMi > 0 ? { distanceMi: Math.round(distanceMi * 100) / 100 } : {};
       if (gpsState === 'tracking') await handleStopGps();
       if (gpsState !== 'idle') await clearGpsRun();
       if (isEditing) {
@@ -193,6 +195,9 @@ export default function LogWorkoutScreen({ navigation, route }: Props) {
           ...gpsField,
         };
         await saveWorkout(entry);
+        // If a Journey Path is active, log the session to path progress
+        // Log to any active Journey Paths that match this workout type
+        await logPathSession(workoutType, mins, gpsField.distanceMi);
         // Auto-write to Apple Health (fire-and-forget)
         saveWorkoutToHealth({
           type: workoutType,
@@ -293,8 +298,8 @@ export default function LogWorkoutScreen({ navigation, route }: Props) {
                 <View style={styles.gpsLive}>
                   <View style={styles.gpsLiveStats}>
                     <View style={styles.gpsLiveStat}>
-                      <Text style={styles.gpsLiveValue}>{distanceKm.toFixed(2)}</Text>
-                      <Text style={styles.gpsLiveLabel}>km</Text>
+                      <Text style={styles.gpsLiveValue}>{distanceMi.toFixed(2)}</Text>
+                      <Text style={styles.gpsLiveLabel}>mi</Text>
                     </View>
                     <View style={styles.gpsLiveDivider} />
                     <View style={styles.gpsLiveStat}>
@@ -310,7 +315,7 @@ export default function LogWorkoutScreen({ navigation, route }: Props) {
               )}
               {gpsState === 'done' && (
                 <View style={styles.gpsDone}>
-                  <Text style={styles.gpsDoneText}>📍 {distanceKm.toFixed(2)} km tracked</Text>
+                  <Text style={styles.gpsDoneText}>📍 {distanceMi.toFixed(2)} mi tracked</Text>
                   <TouchableOpacity onPress={handleDiscardGps}>
                     <Text style={styles.gpsDiscard}>Discard</Text>
                   </TouchableOpacity>

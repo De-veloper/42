@@ -11,12 +11,23 @@ import HomeScreen from './src/screens/HomeScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import LogWorkoutScreen from './src/screens/LogWorkoutScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import CompleteScreen from './src/screens/CompleteScreen';
+import PathDetailScreen from './src/screens/PathDetailScreen';
+import PathProgressScreen from './src/screens/PathProgressScreen';
 
 export type RootStackParamList = {
   Welcome: undefined;
   Main: undefined;
-  LogWorkout: { workout?: import('./src/utils/storage').WorkoutEntry } | undefined;
+  LogWorkout: { workout?: import('./src/utils/storage').WorkoutEntry; pathWorkoutType?: string } | undefined;
   Settings: undefined;
+  Complete: {
+    score: { total: number; level: string; levelColor: string };
+    totalWorkouts: number;
+    totalMinutes: number;
+    streak: number;
+  };
+  PathDetail: { pathId: string };
+  PathProgress: { pathId: string };
 };
 
 export type TabParamList = {
@@ -69,6 +80,9 @@ export default function App() {
           <Stack.Screen name="Main" component={MainTabs} />
           <Stack.Screen name="LogWorkout" component={LogWorkoutScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
+          <Stack.Screen name="Complete" component={CompleteScreen} />
+          <Stack.Screen name="PathDetail" component={PathDetailScreen} />
+          <Stack.Screen name="PathProgress" component={PathProgressScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </GestureHandlerRootView>
