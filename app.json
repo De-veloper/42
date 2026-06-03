@@ -45,6 +45,14 @@
     },
     "plugins": [
       [
+        "expo-build-properties",
+        {
+          "ios": {
+            "buildReactNativeFromSource": true
+          }
+        }
+      ],
+      [
         "expo-location",
         {
           "locationWhenInUsePermission": "42 uses your location to track distance during outdoor workouts.",
@@ -67,7 +75,8 @@
         {
           "sounds": []
         }
-      ]
+      ],
+      "expo-build-properties"
     ]
   }
 }
