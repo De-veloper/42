@@ -6,6 +6,7 @@
 ## 🏃 Journey Paths (Post-42)
 
 - After completing Day 42, show a "What's Next?" screen with final stats
+- Change km to mi on GPS
 - User picks a goal-based path based on their workout history:
   - 🏃 Run a 5K — 8 weeks, 3 runs/week
   - 🚴 Ride 50km — 6 weeks, builds distance weekly
@@ -36,6 +37,14 @@
 - Android GPS foreground service notification styling
 - Test GPS tracking on physical Android device
 - What happens after Day 42 — add "Start Again" or "What's Next" flow
+
+## 📈 Lifetime Score (v2)
+
+- After hitting 100 (Elite), score keeps climbing as a lifetime points system
+- Score becomes a long-term motivator beyond the 42-day challenge
+- e.g. 100 → 200 → 500 → 1000 to reward years of consistency
+- New level names beyond Elite: Legend, Immortal, etc.
+- Shareable lifetime score card
 
 ## 💡 Ideas from v1 (build after using it)
 
