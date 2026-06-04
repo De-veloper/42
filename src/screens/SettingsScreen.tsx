@@ -13,7 +13,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { resetAll, loadRestDays, saveWorkout, saveStartDate, saveProgramStarted } from '../utils/storage';
-import { ALL_PATHS, startPath, logPathSession, saveCompletedGoal } from '../utils/paths';
+import { ALL_PATHS, startPath, logPathSession, saveCompletedGoal, clearActivePath } from '../utils/paths';
 import {
   requestNotificationPermission,
   scheduleDailyReminder,
@@ -73,6 +73,7 @@ export default function SettingsScreen({ navigation }: Props) {
             await resetAll();
             await cancelReminders();
             await resetMilestones();
+            await clearActivePath();
             navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] });
           },
         },
@@ -91,6 +92,7 @@ export default function SettingsScreen({ navigation }: Props) {
           onPress: async () => {
             await resetAll();
             await resetMilestones();
+            await clearActivePath();
 
             // Start date = 42 days ago
             const start = new Date();
@@ -150,6 +152,7 @@ export default function SettingsScreen({ navigation }: Props) {
           onPress: async () => {
             await resetAll();
             await resetMilestones();
+            await clearActivePath();
 
             const DAYS = 14;
             const start = new Date();

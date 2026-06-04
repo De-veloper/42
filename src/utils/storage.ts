@@ -131,6 +131,13 @@ export function getDaysRemaining(startDate: string): number {
   return Math.max(42 - getDayNumber(startDate) + 1, 0);
 }
 
+export function formatMins(mins: number): string {
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
 export function formatDate(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00');
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });

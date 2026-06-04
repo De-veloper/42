@@ -270,6 +270,7 @@ export async function logPathSession(
 
 export async function clearActivePath(): Promise<void> {
   await AsyncStorage.removeItem(PATH_KEY);
+  await AsyncStorage.removeItem(COMPLETED_GOALS_KEY);
 }
 
 const PATH_SEEN_KEY = '@42_path_milestones_seen';

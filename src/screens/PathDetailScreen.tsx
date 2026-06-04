@@ -3,7 +3,6 @@ import {
   View, Text, TouchableOpacity, StyleSheet,
   ScrollView, StatusBar, Alert, Modal, TextInput,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
@@ -38,13 +37,8 @@ export default function PathDetailScreen({ navigation, route }: Props) {
   );
   const customWeeks = baseWeeks + (selectedGoal?.extraWeeks ?? 0);
 
-  const handleStartTap = async () => {
-    const seen = await AsyncStorage.getItem('@42_path_disclaimer_seen');
-    if (!seen) {
-      setShowDisclaimer(true);
-    } else {
-      await doStart();
-    }
+  const handleStartTap = () => {
+    setShowDisclaimer(true);
   };
 
   const doStart = async () => {
@@ -258,18 +252,19 @@ export default function PathDetailScreen({ navigation, route }: Props) {
           <View style={styles.disclaimerCard}>
             <Text style={styles.disclaimerEmoji}>⚠️</Text>
             <Text style={styles.disclaimerTitle}>Before You Start</Text>
-            <Text style={styles.disclaimerBody}>
-              {`This training plan is for general fitness purposes only and is NOT a substitute for professional medical advice.\n\n`}
-              {`• Consult a doctor before starting any new exercise program, especially if you have any medical conditions.\n`}
-              {`• Stop immediately and seek medical attention if you experience pain, dizziness, or shortness of breath.\n`}
-              {`• Progress at your own pace — it's okay to repeat weeks.\n`}
-              {`• Warm up before and cool down after every session.\n\n`}
-              {`By continuing, you acknowledge these risks and accept full responsibility for your training.`}
-            </Text>
+            <ScrollView style={styles.disclaimerScroll} showsVerticalScrollIndicator={false}>
+              <Text style={styles.disclaimerBody}>
+                {`This training plan is for general fitness purposes only and is NOT a substitute for professional medical advice.\n\n`}
+                {`• Consult a doctor before starting any new exercise program, especially if you have any medical conditions.\n`}
+                {`• Stop immediately and seek medical attention if you experience pain, dizziness, or shortness of breath.\n`}
+                {`• Progress at your own pace — it's okay to repeat weeks.\n`}
+                {`• Warm up before and cool down after every session.\n\n`}
+                {`By continuing, you acknowledge these risks and accept full responsibility for your training.`}
+              </Text>
+            </ScrollView>
             <TouchableOpacity
               style={styles.disclaimerBtn}
               onPress={async () => {
-                await AsyncStorage.setItem('@42_path_disclaimer_seen', 'true');
                 setShowDisclaimer(false);
                 await doStart();
               }}
@@ -347,11 +342,12 @@ const styles = StyleSheet.create({
   disclaimerCard: {
     backgroundColor: '#041428', borderRadius: 24, padding: 28,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
-    maxHeight: '85%',
+    maxHeight: '85%', width: '100%',
   },
+  disclaimerScroll: { maxHeight: 240, marginBottom: 16 },
   disclaimerEmoji: { fontSize: 40, textAlign: 'center', marginBottom: 12 },
   disclaimerTitle: { fontSize: 22, fontWeight: '900', color: '#fff', textAlign: 'center', marginBottom: 16 },
-  disclaimerBody: { fontSize: 14, color: 'rgba(255,255,255,0.6)', lineHeight: 22, marginBottom: 24 },
+  disclaimerBody: { fontSize: 14, color: 'rgba(255,255,255,0.6)', lineHeight: 22 },
   disclaimerBtn: {
     backgroundColor: '#00E5CC', borderRadius: 14,
     paddingVertical: 14, alignItems: 'center',

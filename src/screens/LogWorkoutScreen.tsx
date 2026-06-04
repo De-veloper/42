@@ -92,7 +92,12 @@ export default function LogWorkoutScreen({ navigation, route }: Props) {
       setDistanceKm(km);
       setElapsedMs(capturedElapsed);
       // Always populate duration from GPS if user hasn't typed one
-      if (mins > 0) setDuration(String(mins));
+      if (mins > 0) {
+        const formatted = mins >= 60
+          ? `${Math.floor(mins/60)}:${String(mins%60).padStart(2,'0')}`
+          : String(mins);
+        setDuration(formatted);
+      }
     }
     setGpsState('done');
   };
@@ -158,10 +163,18 @@ export default function LogWorkoutScreen({ navigation, route }: Props) {
     setPhotoUri(dest);
   };
 
+  // Parse "1:30" → 90, "1:30:00" → 90, "45" → 45
+  const parseDuration = (val: string): number => {
+    const parts = val.trim().split(':').map(Number);
+    if (parts.length === 3) return parts[0] * 60 + parts[1] + Math.round(parts[2] / 60);
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    return Math.round(parts[0]);
+  };
+
   const handleSave = async () => {
-    const mins = parseInt(duration, 10);
+    const mins = parseDuration(duration);
     if (!duration || isNaN(mins) || mins <= 0) {
-      Alert.alert('Missing duration', 'Please enter how long you worked out (in minutes).');
+      Alert.alert('Missing duration', 'Enter time as minutes (e.g. 45) or h:mm (e.g. 1:30).');
       return;
     }
     setSaving(true);
@@ -261,28 +274,33 @@ export default function LogWorkoutScreen({ navigation, route }: Props) {
               style={styles.input}
               value={duration}
               onChangeText={setDuration}
-              placeholder="e.g. 30"
+              placeholder="45  or  1:30"
               placeholderTextColor="rgba(255,255,255,0.25)"
-              keyboardType="number-pad"
+              keyboardType="numbers-and-punctuation"
               returnKeyType="done"
-              maxLength={4}
+              maxLength={7}
             />
-            <Text style={styles.inputUnit}>min</Text>
+            <Text style={styles.inputUnit}>h:mm</Text>
           </View>
 
           {/* Quick duration pills */}
           <View style={styles.quickDurationRow}>
-            {[15, 20, 30, 45, 60, 90].map(m => (
-              <TouchableOpacity
-                key={m}
-                style={[styles.quickPill, duration === String(m) && styles.quickPillSelected]}
-                onPress={() => setDuration(String(m))}
-              >
-                <Text style={[styles.quickPillText, duration === String(m) && styles.quickPillTextSelected]}>
-                  {m}m
-                </Text>
-              </TouchableOpacity>
-            ))}
+            {[15, 20, 30, 45, 60, 90, 120].map(m => {
+              const label = m >= 60 ? `${Math.floor(m/60)}:${String(m%60).padStart(2,'0')}` : `${m}m`;
+              const val = m >= 60 ? `${Math.floor(m/60)}:${String(m%60).padStart(2,'0')}` : String(m);
+              const isSelected = parseDuration(duration) === m;
+              return (
+                <TouchableOpacity
+                  key={m}
+                  style={[styles.quickPill, isSelected && styles.quickPillSelected]}
+                  onPress={() => setDuration(val)}
+                >
+                  <Text style={[styles.quickPillText, isSelected && styles.quickPillTextSelected]}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           {/* GPS tracking */}

@@ -12,7 +12,7 @@ import LinearGradient from "react-native-linear-gradient";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RouteProp } from "@react-navigation/native";
 import { RootStackParamList } from "../../App";
-import { resetAll } from "../utils/storage";
+import { resetAll, formatMins } from "../utils/storage";
 import { cancelReminders } from "../utils/notifications";
 import { resetMilestones } from "../utils/milestones";
 import { ALL_PATHS, loadActivePaths, ActivePath } from "../utils/paths";
@@ -93,7 +93,7 @@ export default function CompleteScreen({ navigation, route }: Props) {
         <View style={styles.statsRow}>
           {[
             { value: totalWorkouts, label: "Workouts" },
-            { value: totalMinutes, label: "Total Mins" },
+            { value: formatMins(totalMinutes), label: "Total Time" },
             { value: streak, label: "Best Streak" },
           ].map((s) => (
             <View key={s.label} style={styles.statChip}>
@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
   },
-  statValue: { fontSize: 26, fontWeight: "900", color: "#00BFFF" },
+  statValue: { fontSize: 18, fontWeight: "900", color: "#00BFFF" },
   statLabel: { fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 4 },
 
   sectionTitle: {

@@ -47,6 +47,7 @@ import {
   saveProgramStarted,
   getDayNumber,
   resetAll,
+  formatMins,
   AppData,
   WorkoutEntry,
 } from "../utils/storage";
@@ -55,7 +56,12 @@ import {
   FEELING_LABELS,
   WORKOUT_TYPES,
 } from "../utils/fitnessScore";
-import { loadActivePaths, ALL_PATHS, ActivePath } from "../utils/paths";
+import {
+  loadActivePaths,
+  ALL_PATHS,
+  ActivePath,
+  clearActivePath,
+} from "../utils/paths";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type Props = {
@@ -92,7 +98,7 @@ export default function HomeScreen({ navigation }: Props) {
           loadWorkouts(),
           loadRestDays(),
           loadActivePaths(),
-          AsyncStorage.getItem('@42_user_name'),
+          AsyncStorage.getItem("@42_user_name"),
         ]);
         setData(appData);
         setWorkouts(wks);
@@ -213,9 +219,15 @@ export default function HomeScreen({ navigation }: Props) {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.headerTitle}>
-              {userName ? `Hi ${userName} 👋` : '42'}
-            </Text>
+            <Text style={styles.headerTitle}>42</Text>
+            {userName && (
+              <Text style={styles.headerGreeting} numberOfLines={1}>
+                {(() => {
+                  const n = userName.split(" ")[0];
+                  return `Hi ${n.length > 14 ? n.slice(0, 14) + "…" : n} 👋`;
+                })()}
+              </Text>
+            )}
             <Text style={styles.headerDate}>
               {new Date().toLocaleDateString("en-US", {
                 weekday: "short",
@@ -387,8 +399,10 @@ export default function HomeScreen({ navigation }: Props) {
                   </View>
                   <View style={styles.weekStatDivider} />
                   <View style={styles.weekStat}>
-                    <Text style={styles.weekStatValue}>{weekTotalMins}</Text>
-                    <Text style={styles.weekStatLabel}>Total mins</Text>
+                    <Text style={styles.weekStatValue}>
+                      {formatMins(weekTotalMins)}
+                    </Text>
+                    <Text style={styles.weekStatLabel}>This week</Text>
                   </View>
                   <View style={styles.weekStatDivider} />
                   <View style={styles.weekStat}>
@@ -420,32 +434,44 @@ export default function HomeScreen({ navigation }: Props) {
             {isFinished && activePaths.length > 0 && (
               <TouchableOpacity
                 style={styles.addPathBtn}
-                onPress={() => navigation.navigate('Complete', {
-                  score: { total: score.total, level: score.level, levelColor: score.levelColor },
-                  totalWorkouts: workouts.length,
-                  totalMinutes: score.totalMinutes,
-                  streak: score.streak,
-                })}
+                onPress={() =>
+                  navigation.navigate("Complete", {
+                    score: {
+                      total: score.total,
+                      level: score.level,
+                      levelColor: score.levelColor,
+                    },
+                    totalWorkouts: workouts.length,
+                    totalMinutes: score.totalMinutes,
+                    streak: score.streak,
+                  })
+                }
                 activeOpacity={0.8}
               >
-                <Text style={styles.addPathBtnText}>＋ Add another Journey Path</Text>
+                <Text style={styles.addPathBtnText}>
+                  ＋ Add another Journey Path
+                </Text>
               </TouchableOpacity>
             )}
 
             {/* Active Journey Path banners */}
-            {activePaths.map(ap => {
-              const p = ALL_PATHS.find(x => x.id === ap.pathId);
+            {activePaths.map((ap) => {
+              const p = ALL_PATHS.find((x) => x.id === ap.pathId);
               if (!p) return null;
               return (
                 <TouchableOpacity
                   key={ap.pathId}
                   style={styles.pathBanner}
-                  onPress={() => navigation.navigate('PathProgress', { pathId: ap.pathId })}
+                  onPress={() =>
+                    navigation.navigate("PathProgress", { pathId: ap.pathId })
+                  }
                   activeOpacity={0.8}
                 >
                   <Text style={styles.pathBannerIcon}>{p.icon}</Text>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.pathBannerTitle}>Journey: {p.title}</Text>
+                    <Text style={styles.pathBannerTitle}>
+                      Journey: {p.title}
+                    </Text>
                     <Text style={styles.pathBannerSub}>
                       {ap.sessions.length} sessions · Tap to view progress
                     </Text>
@@ -483,22 +509,34 @@ export default function HomeScreen({ navigation }: Props) {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.startAgainBtn}
-                  onPress={() => Alert.alert(
-                    'Start a New Challenge?',
-                    'This resets all workouts and progress. Your journey paths will continue.',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      { text: 'Start Fresh', style: 'destructive', onPress: async () => {
-                        await resetAll();
-                        await cancelReminders();
-                        await resetMilestones();
-                        (navigation as any).reset({ index: 0, routes: [{ name: 'Welcome' }] });
-                      }},
-                    ]
-                  )}
+                  onPress={() =>
+                    Alert.alert(
+                      "Start a New Challenge?",
+                      "This resets all workouts and progress. Your journey paths will continue.",
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: "Start Fresh",
+                          style: "destructive",
+                          onPress: async () => {
+                            await resetAll();
+                            await cancelReminders();
+                            await resetMilestones();
+                            await clearActivePath();
+                            (navigation as any).reset({
+                              index: 0,
+                              routes: [{ name: "Welcome" }],
+                            });
+                          },
+                        },
+                      ],
+                    )
+                  }
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.startAgainText}>↺ Start a New 42-Day Challenge</Text>
+                  <Text style={styles.startAgainText}>
+                    ↺ Start a New 42-Day Challenge
+                  </Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -599,7 +637,7 @@ export default function HomeScreen({ navigation }: Props) {
                     {
                       label: "Volume",
                       value: score.volume,
-                      hint: `avg ${score.avgDuration} min`,
+                      hint: `avg ${formatMins(score.avgDuration)}`,
                     },
                   ] as const
                 ).map((row) => (
@@ -824,6 +862,12 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     color: "#00E5CC",
     letterSpacing: 2,
+  },
+  headerGreeting: {
+    fontSize: 13,
+    color: "#00E5CC",
+    fontWeight: "600",
+    marginTop: -2,
   },
   headerDate: {
     fontSize: 13,
@@ -1120,7 +1164,7 @@ const styles = StyleSheet.create({
 
   weekStats: { flexDirection: "row", alignItems: "center" },
   weekStat: { flex: 1, alignItems: "center" },
-  weekStatValue: { fontSize: 22, fontWeight: "900", color: "#00E5CC" },
+  weekStatValue: { fontSize: 16, fontWeight: "900", color: "#00E5CC" },
   weekStatOf: {
     fontSize: 13,
     fontWeight: "500",
@@ -1282,7 +1326,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.15)",
   },
-  startAgainText: { color: "rgba(255,255,255,0.4)", fontSize: 13, fontWeight: "600" },
+  startAgainText: {
+    color: "rgba(255,255,255,0.4)",
+    fontSize: 13,
+    fontWeight: "600",
+  },
   addPathBtn: {
     marginHorizontal: 24,
     marginTop: 10,
@@ -1293,7 +1341,11 @@ const styles = StyleSheet.create({
     borderStyle: "dashed",
     borderColor: "rgba(0,229,204,0.3)",
   },
-  addPathBtnText: { color: "rgba(0,229,204,0.7)", fontSize: 14, fontWeight: "600" },
+  addPathBtnText: {
+    color: "rgba(0,229,204,0.7)",
+    fontSize: 14,
+    fontWeight: "600",
+  },
 
   // Journey Path banner
   pathBanner: {
@@ -1311,7 +1363,11 @@ const styles = StyleSheet.create({
   pathBannerIcon: { fontSize: 24 },
   pathBannerTitle: { fontSize: 14, fontWeight: "700", color: "#fff" },
   pathBannerSub: { fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 2 },
-  pathBannerArrow: { fontSize: 20, color: "rgba(0,191,255,0.6)", fontWeight: "700" },
+  pathBannerArrow: {
+    fontSize: 20,
+    color: "rgba(0,191,255,0.6)",
+    fontWeight: "700",
+  },
 
   // Today section
   todaySection: { paddingHorizontal: 24, marginTop: 24 },
