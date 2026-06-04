@@ -26,6 +26,7 @@ import {
   getSavedReminderTime,
   saveReminderTime,
   sendTestNotification,
+  cancelReminders,
   DEFAULT_HOUR,
 } from "../utils/notifications";
 import {
@@ -34,6 +35,7 @@ import {
   getUnlockedIds,
   getSeenMilestones,
   markMilestonesSeen,
+  resetMilestones,
 } from "../utils/milestones";
 import {
   loadData,
@@ -44,6 +46,7 @@ import {
   saveStartDate,
   saveProgramStarted,
   getDayNumber,
+  resetAll,
   AppData,
   WorkoutEntry,
 } from "../utils/storage";
@@ -53,6 +56,7 @@ import {
   WORKOUT_TYPES,
 } from "../utils/fitnessScore";
 import { loadActivePaths, ALL_PATHS, ActivePath } from "../utils/paths";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type Props = {
   navigation: CompositeNavigationProp<
@@ -73,6 +77,7 @@ export default function HomeScreen({ navigation }: Props) {
   const [unlockedIds, setUnlockedIds] = useState<string[]>([]);
   const [restDays, setRestDays] = useState<string[]>([]);
   const [activePaths, setActivePaths] = useState<ActivePath[]>([]);
+  const [userName, setUserName] = useState<string | null>(null);
   const shareCardRef = useRef<ViewShotRef>(null);
 
   useEffect(() => {
@@ -82,16 +87,18 @@ export default function HomeScreen({ navigation }: Props) {
   useFocusEffect(
     useCallback(() => {
       (async () => {
-        const [appData, wks, rds, aps] = await Promise.all([
+        const [appData, wks, rds, aps, name] = await Promise.all([
           loadData(),
           loadWorkouts(),
           loadRestDays(),
           loadActivePaths(),
+          AsyncStorage.getItem('@42_user_name'),
         ]);
         setData(appData);
         setWorkouts(wks);
         setRestDays(rds);
         setActivePaths(aps);
+        setUserName(name);
       })();
     }, []),
   );
@@ -206,7 +213,9 @@ export default function HomeScreen({ navigation }: Props) {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.headerTitle}>42</Text>
+            <Text style={styles.headerTitle}>
+              {userName ? `Hi ${userName} 👋` : '42'}
+            </Text>
             <Text style={styles.headerDate}>
               {new Date().toLocaleDateString("en-US", {
                 weekday: "short",
@@ -407,6 +416,22 @@ export default function HomeScreen({ navigation }: Props) {
               </View>
             )}
 
+            {/* Add another path — visible when finished and paths are active */}
+            {isFinished && activePaths.length > 0 && (
+              <TouchableOpacity
+                style={styles.addPathBtn}
+                onPress={() => navigation.navigate('Complete', {
+                  score: { total: score.total, level: score.level, levelColor: score.levelColor },
+                  totalWorkouts: workouts.length,
+                  totalMinutes: score.totalMinutes,
+                  streak: score.streak,
+                })}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.addPathBtnText}>＋ Add another Journey Path</Text>
+              </TouchableOpacity>
+            )}
+
             {/* Active Journey Path banners */}
             {activePaths.map(ap => {
               const p = ALL_PATHS.find(x => x.id === ap.pathId);
@@ -455,6 +480,25 @@ export default function HomeScreen({ navigation }: Props) {
                   activeOpacity={0.8}
                 >
                   <Text style={styles.seeResultsText}>See Your Results →</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.startAgainBtn}
+                  onPress={() => Alert.alert(
+                    'Start a New Challenge?',
+                    'This resets all workouts and progress. Your journey paths will continue.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Start Fresh', style: 'destructive', onPress: async () => {
+                        await resetAll();
+                        await cancelReminders();
+                        await resetMilestones();
+                        (navigation as any).reset({ index: 0, routes: [{ name: 'Welcome' }] });
+                      }},
+                    ]
+                  )}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.startAgainText}>↺ Start a New 42-Day Challenge</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -1230,6 +1274,26 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,229,204,0.1)",
   },
   seeResultsText: { color: "#00E5CC", fontSize: 15, fontWeight: "700" },
+  startAgainBtn: {
+    marginTop: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.15)",
+  },
+  startAgainText: { color: "rgba(255,255,255,0.4)", fontSize: 13, fontWeight: "600" },
+  addPathBtn: {
+    marginHorizontal: 24,
+    marginTop: 10,
+    paddingVertical: 11,
+    alignItems: "center",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: "rgba(0,229,204,0.3)",
+  },
+  addPathBtnText: { color: "rgba(0,229,204,0.7)", fontSize: 14, fontWeight: "600" },
 
   // Journey Path banner
   pathBanner: {
@@ -1308,7 +1372,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     gap: 10,
   },
-  scoreRowMeta: { width: 90 },
+  scoreRowMeta: { width: 100 },
   scoreRowLabel: {
     color: "rgba(255,255,255,0.7)",
     fontSize: 12,

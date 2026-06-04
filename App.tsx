@@ -26,7 +26,7 @@ export type RootStackParamList = {
     totalMinutes: number;
     streak: number;
   };
-  PathDetail: { pathId: string };
+  PathDetail: { pathId: string; fromCompletion?: boolean };
   PathProgress: { pathId: string };
 };
 

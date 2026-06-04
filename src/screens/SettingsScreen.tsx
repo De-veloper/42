@@ -13,6 +13,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { resetAll, loadRestDays, saveWorkout, saveStartDate, saveProgramStarted } from '../utils/storage';
+import { ALL_PATHS, startPath, logPathSession, saveCompletedGoal } from '../utils/paths';
 import {
   requestNotificationPermission,
   scheduleDailyReminder,
@@ -190,6 +191,52 @@ export default function SettingsScreen({ navigation }: Props) {
     );
   };
 
+  const handleLoadCompletedPath = () => {
+    Alert.alert(
+      'Load Completed Path',
+      'Starts a Run a 5K path and fills it with enough sessions to trigger Goal Achieved.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Load',
+          onPress: async () => {
+            const path = ALL_PATHS.find(p => p.id === 'run_5k')!;
+            const totalSessions = path.weeklyPlan.reduce((s, w) => s + w.sessions, 0);
+            // Start date far enough back that all weeks have passed
+            const weeksNeeded = path.weeks;
+            const start = new Date();
+            start.setDate(start.getDate() - weeksNeeded * 7 - 1);
+            const fmt = (d: Date) =>
+              `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            await startPath('run_5k');
+            // Patch the start date directly in storage
+            const raw = await AsyncStorage.getItem('@42_active_path');
+            if (raw) {
+              const paths = JSON.parse(raw);
+              const idx = paths.findIndex((p: any) => p.pathId === 'run_5k');
+              if (idx >= 0) {
+                paths[idx].startDate = fmt(start);
+                // Add all required sessions spread across the weeks
+                const sessions = [];
+                for (let i = 0; i < totalSessions; i++) {
+                  const d = new Date(start);
+                  d.setDate(start.getDate() + Math.floor(i * weeksNeeded * 7 / totalSessions));
+                  sessions.push({ date: fmt(d), duration: 25 + Math.floor(Math.random() * 20), distanceMi: parseFloat((1.5 + i * 0.1).toFixed(2)) });
+                }
+                paths[idx].sessions = sessions;
+                paths[idx].selectedGoalId = '5k'; // mark as 5K goal
+                await AsyncStorage.setItem('@42_active_path', JSON.stringify(paths));
+              }
+            }
+            // Save 5K as completed so 10K unlocks
+            await saveCompletedGoal('run_5k', '5k');
+            Alert.alert('Done!', 'Run a 5K path loaded as complete. Open it from the home page banner. 10K is now unlocked!');
+          },
+        },
+      ]
+    );
+  };
+
   const hourLabel = (h: number) => h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`;
 
   return (
@@ -262,6 +309,11 @@ export default function SettingsScreen({ navigation }: Props) {
             <TouchableOpacity style={styles.mockCard} onPress={handleLoadMockData} activeOpacity={0.8}>
               <Text style={styles.mockTitle}>Load Full 42-Day Mock</Text>
               <Text style={styles.mockSubtitle}>Complete 42 days — test milestones, completion screen, Journey Paths.</Text>
+            </TouchableOpacity>
+            <View style={{ height: 10 }} />
+            <TouchableOpacity style={styles.mockCard} onPress={handleLoadCompletedPath} activeOpacity={0.8}>
+              <Text style={styles.mockTitle}>Load Completed 5K Path</Text>
+              <Text style={styles.mockSubtitle}>Fills Run a 5K with all sessions complete — test Goal Achieved + share card.</Text>
             </TouchableOpacity>
           </>
         )}

@@ -17,11 +17,20 @@ export interface PathMilestone {
   description: string;
 }
 
+export interface GoalOption {
+  id: string;
+  label: string;
+  targetMi: number;
+  extraWeeks: number; // added weeks beyond base plan
+  requiresGoalId?: string; // must complete this goal first to unlock
+}
+
 export interface PathDefinition {
   id: string;
   icon: string;
   title: string;
   goal: string;
+  goalOptions?: GoalOption[]; // optional distance choices
   goalDetail: string;
   weeks: number;
   color: string;
@@ -33,6 +42,9 @@ export interface PathDefinition {
 export interface ActivePath {
   pathId: string;
   startDate: string;
+  customSessionsPerWeek?: number;
+  selectedGoalId?: string;
+  customTargetMi?: number; // used when selectedGoalId === 'custom'
   sessions: Array<{
     date: string;
     duration: number;
@@ -44,12 +56,18 @@ export const ALL_PATHS: PathDefinition[] = [
   {
     id: 'run_5k',
     icon: '🏃',
-    title: 'Run a 5K',
-    goal: 'Run 3.1 miles',
-    goalDetail: 'Complete a 5K run — 3.1 miles without stopping.',
+    title: 'Running Goal',
+    goal: 'Pick your distance',
+    goalDetail: 'Choose your running goal and build up to it week by week.',
     weeks: 8,
     color: '#00BFFF',
     workoutType: 'Run',
+    goalOptions: [
+      { id: '5k',     label: '5K',            targetMi: 3.1,  extraWeeks: 0 },
+      { id: '10k',    label: '10K',           targetMi: 6.2,  extraWeeks: 4,  requiresGoalId: 'run_5k:5k' },
+      { id: 'hm',     label: 'Half Marathon', targetMi: 13.1, extraWeeks: 8,  requiresGoalId: 'run_5k:10k' },
+      { id: 'custom', label: 'Custom',        targetMi: 0,    extraWeeks: 0  },
+    ],
     weeklyPlan: [
       { week: 1, sessions: 3, minDuration: 15, description: 'Easy 15-min runs, build the habit' },
       { week: 2, sessions: 3, minDuration: 20, description: 'Extend to 20 mins, keep it comfortable' },
@@ -72,19 +90,25 @@ export const ALL_PATHS: PathDefinition[] = [
   {
     id: 'ride_50k',
     icon: '🚴',
-    title: 'Ride 50km',
-    goal: 'Ride 31 miles',
-    goalDetail: 'Complete a 50km (31 mile) ride at a steady pace.',
+    title: 'Riding Goal',
+    goal: 'Pick your distance',
+    goalDetail: 'Choose your ride goal and build distance week by week.',
     weeks: 6,
     color: '#00E5CC',
     workoutType: 'Ride',
+    goalOptions: [
+      { id: '25mi',  label: '25 mi',       targetMi: 25,  extraWeeks: 0  },
+      { id: '50mi',  label: '50 mi',       targetMi: 50,  extraWeeks: 4,  requiresGoalId: 'ride_50k:25mi' },
+      { id: '100mi', label: 'Century',     targetMi: 100, extraWeeks: 10, requiresGoalId: 'ride_50k:50mi' },
+      { id: 'custom', label: 'Custom',     targetMi: 0,   extraWeeks: 0  },
+    ],
     weeklyPlan: [
       { week: 1, sessions: 2, minDuration: 30, targetMi: 5, description: '2 rides, build your base endurance' },
       { week: 2, sessions: 2, minDuration: 45, targetMi: 8, description: 'Longer rides, focus on cadence' },
       { week: 3, sessions: 3, minDuration: 45, targetMi: 12, description: 'Add a third ride, push distance' },
       { week: 4, sessions: 3, minDuration: 60, targetMi: 18, description: 'One long ride of 18 miles' },
       { week: 5, sessions: 3, minDuration: 60, targetMi: 25, description: 'Peak week — 25 mile long ride' },
-      { week: 6, sessions: 2, minDuration: 30, targetMi: 31, description: 'Easy recovery rides + goal 50km!' },
+      { week: 6, sessions: 2, minDuration: 30, targetMi: 28, description: 'Easy recovery rides + goal ¼ Ironman!' },
     ],
     milestones: [
       { id: 'first_ride',  emoji: '🚴', title: 'First Ride',    description: 'Log your first ride session' },
@@ -190,13 +214,33 @@ export async function loadActivePath(pathId: string): Promise<ActivePath | null>
   return paths.find(p => p.pathId === pathId) ?? null;
 }
 
-export async function startPath(pathId: string): Promise<void> {
+export async function startPath(pathId: string, customSessionsPerWeek?: number, selectedGoalId?: string, customTargetMi?: number): Promise<void> {
   const d = new Date();
   const today = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   const existing = await loadActivePaths();
   const updated = existing.filter(p => p.pathId !== pathId);
-  updated.push({ pathId, startDate: today, sessions: [] });
+  updated.push({
+    pathId, startDate: today, sessions: [],
+    ...(customSessionsPerWeek ? { customSessionsPerWeek } : {}),
+    ...(selectedGoalId ? { selectedGoalId } : {}),
+    ...(customTargetMi ? { customTargetMi } : {}),
+  });
   await AsyncStorage.setItem(PATH_KEY, JSON.stringify(updated));
+}
+
+export function getSelectedGoal(path: PathDefinition, active?: ActivePath | null) {
+  if (!path.goalOptions) return null;
+  return path.goalOptions.find(g => g.id === active?.selectedGoalId) ?? path.goalOptions[0];
+}
+
+export function getEffectiveSessionsPerWeek(path: PathDefinition, active: ActivePath): number {
+  return active.customSessionsPerWeek ?? path.weeklyPlan[0]?.sessions ?? 3;
+}
+
+export function getEffectiveWeeks(path: PathDefinition, active: ActivePath): number {
+  const totalSessions = path.weeklyPlan.reduce((s, w) => s + w.sessions, 0);
+  const spw = getEffectiveSessionsPerWeek(path, active);
+  return Math.ceil(totalSessions / spw);
 }
 
 export async function stopPath(pathId: string): Promise<void> {
@@ -229,6 +273,25 @@ export async function clearActivePath(): Promise<void> {
 }
 
 const PATH_SEEN_KEY = '@42_path_milestones_seen';
+const COMPLETED_GOALS_KEY = '@42_completed_goals';
+
+export async function getCompletedGoals(): Promise<string[]> {
+  const raw = await AsyncStorage.getItem(COMPLETED_GOALS_KEY);
+  return raw ? JSON.parse(raw) : [];
+}
+
+export async function saveCompletedGoal(pathId: string, goalId?: string): Promise<void> {
+  const key = goalId ? `${pathId}:${goalId}` : pathId;
+  const existing = await getCompletedGoals();
+  if (!existing.includes(key)) {
+    await AsyncStorage.setItem(COMPLETED_GOALS_KEY, JSON.stringify([...existing, key]));
+  }
+}
+
+export function isGoalUnlocked(goal: GoalOption, completedGoals: string[]): boolean {
+  if (!goal.requiresGoalId) return true;
+  return completedGoals.includes(goal.requiresGoalId);
+}
 
 export async function getSeenPathMilestones(): Promise<string[]> {
   const raw = await AsyncStorage.getItem(PATH_SEEN_KEY);

@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, StatusBar, Alert,
+  ScrollView, StatusBar, Alert, Modal, TextInput,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import LinearGradient from 'react-native-linear-gradient';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../../App';
-import { ALL_PATHS, startPath, loadActivePath, loadActivePaths } from '../utils/paths';
+import { ALL_PATHS, startPath, stopPath, loadActivePath, getEffectiveWeeks, GoalOption, getCompletedGoals, isGoalUnlocked, saveCompletedGoal } from '../utils/paths';
 
 interface Props {
   navigation: NativeStackNavigationProp<RootStackParamList, 'PathDetail'>;
@@ -15,18 +16,49 @@ interface Props {
 }
 
 export default function PathDetailScreen({ navigation, route }: Props) {
-  const { pathId } = route.params;
+  const { pathId, fromCompletion } = route.params;
   const path = ALL_PATHS.find(p => p.id === pathId)!;
+  const defaultSPW = path.weeklyPlan[0]?.sessions ?? 3;
   const [hasActivePath, setHasActivePath] = useState(false);
+  const [showDisclaimer, setShowDisclaimer] = useState(false);
+  const [sessionsPerWeek, setSessionsPerWeek] = useState(defaultSPW);
+  const [selectedGoal, setSelectedGoal] = useState<GoalOption | null>(path.goalOptions?.[0] ?? null);
+  const [customMiles, setCustomMiles] = useState('');
+  const [completedGoals, setCompletedGoals] = useState<string[]>([]);
 
   useEffect(() => {
-    loadActivePath(pathId).then(ap => setHasActivePath(!!ap));
+    Promise.all([loadActivePath(pathId), getCompletedGoals()]).then(([ap, cg]) => {
+      setHasActivePath(!!ap);
+      setCompletedGoals(cg);
+    });
   }, []);
 
-  const handleStart = async () => {
-    await startPath(pathId);
+  const baseWeeks = Math.ceil(
+    path.weeklyPlan.reduce((s, w) => s + w.sessions, 0) / sessionsPerWeek
+  );
+  const customWeeks = baseWeeks + (selectedGoal?.extraWeeks ?? 0);
+
+  const handleStartTap = async () => {
+    const seen = await AsyncStorage.getItem('@42_path_disclaimer_seen');
+    if (!seen) {
+      setShowDisclaimer(true);
+    } else {
+      await doStart();
+    }
+  };
+
+  const doStart = async () => {
+    if (selectedGoal?.id === 'custom' && (!customMiles || parseFloat(customMiles) <= 0)) {
+      Alert.alert('Enter your goal', 'Please enter a distance in miles.');
+      return;
+    }
+    if (fromCompletion) {
+      await stopPath(pathId);
+    }
+    const custom = sessionsPerWeek !== defaultSPW ? sessionsPerWeek : undefined;
+    const customMi = selectedGoal?.id === 'custom' ? parseFloat(customMiles) : undefined;
+    await startPath(pathId, custom, selectedGoal?.id, customMi);
     setHasActivePath(true);
-    // Go back to CompleteScreen so user can pick additional paths
     navigation.goBack();
   };
 
@@ -51,12 +83,12 @@ export default function PathDetailScreen({ navigation, route }: Props) {
 
           <View style={[styles.metaRow]}>
             <View style={styles.metaChip}>
-              <Text style={styles.metaValue}>{path.weeks}</Text>
+              <Text style={styles.metaValue}>{customWeeks}</Text>
               <Text style={styles.metaLabel}>Weeks</Text>
             </View>
             <View style={styles.metaChip}>
               <Text style={styles.metaValue}>{path.weeklyPlan.reduce((s,w) => s + w.sessions, 0)}</Text>
-              <Text style={styles.metaLabel}>Total Sessions</Text>
+              <Text style={styles.metaLabel}>Sessions</Text>
             </View>
             <View style={styles.metaChip}>
               <Text style={styles.metaValue}>{path.workoutType}</Text>
@@ -65,26 +97,141 @@ export default function PathDetailScreen({ navigation, route }: Props) {
           </View>
         </View>
 
-        {/* Weekly plan */}
-        <Text style={styles.sectionTitle}>Weekly Plan</Text>
-        {path.weeklyPlan.map((w) => (
-          <View key={w.week} style={styles.weekRow}>
-            <View style={[styles.weekBadge, { borderColor: path.color }]}>
-              <Text style={[styles.weekNum, { color: path.color }]}>W{w.week}</Text>
+        {/* Goal picker — shown first, above weekly plan */}
+        {path.goalOptions && (() => {
+          // Max custom = highest unlocked real goal × 1.2, rounded to nearest 5
+          const unlockedPresets = path.goalOptions!
+            .filter(g => g.id !== 'custom' && isGoalUnlocked(g, completedGoals));
+          const highestUnlocked = unlockedPresets.reduce((m, g) => Math.max(m, g.targetMi), 0);
+          const maxCustom = highestUnlocked > 0 ? Math.round(highestUnlocked * 1.2 / 5) * 5 : null;
+          return (
+          <View style={[styles.freqCard, { marginBottom: 20 }]}>
+            <Text style={styles.freqTitle}>Choose your goal</Text>
+            <View style={styles.freqRow}>
+              {path.goalOptions.map(g => {
+                const sel = selectedGoal?.id === g.id;
+                const unlocked = isGoalUnlocked(g, completedGoals);
+                const reqLabel = g.requiresGoalId
+                  ? path.goalOptions?.find(x => `${pathId}:${x.id}` === g.requiresGoalId)?.label
+                  : null;
+                return (
+                  <TouchableOpacity
+                    key={g.id}
+                    style={[
+                      styles.freqPill,
+                      sel && { backgroundColor: `${path.color}22`, borderColor: path.color },
+                      !unlocked && { opacity: 0.45 },
+                    ]}
+                    onPress={() => {
+                      if (!unlocked) {
+                        Alert.alert('Locked 🔒', `Complete the ${reqLabel} challenge first to unlock this goal.`);
+                        return;
+                      }
+                      setSelectedGoal(g);
+                    }}
+                  >
+                    <Text style={[styles.freqPillNum, { fontSize: g.label.length > 5 ? 12 : 15 }, sel && { color: path.color }]}>
+                      {unlocked ? g.label : `🔒 ${g.label}`}
+                    </Text>
+                    <Text style={styles.freqPillRec}>{g.targetMi} mi</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.weekDesc}>{w.description}</Text>
-              <Text style={styles.weekMeta}>
-                {w.sessions}× per week · {w.minDuration}+ min
-                {w.targetMi ? `  ·  ${w.targetMi} mi target` : ''}
-              </Text>
-            </View>
+            {selectedGoal?.id === 'custom' && (
+              <View style={styles.customInputRow}>
+                <TextInput
+                  style={styles.customInput}
+                  value={customMiles}
+                  onChangeText={v => {
+                    const n = parseFloat(v);
+                    if (maxCustom && n > maxCustom) {
+                      Alert.alert('Locked 🔒', `Unlock the next level first. Max custom distance is ${maxCustom} miles right now.`);
+                      return;
+                    }
+                    setCustomMiles(v);
+                  }}
+                  placeholder={maxCustom ? `up to ${maxCustom} mi` : 'e.g. 35'}
+                  placeholderTextColor="rgba(255,255,255,0.25)"
+                  keyboardType="decimal-pad"
+                  maxLength={5}
+                />
+                <Text style={styles.customInputUnit}>miles</Text>
+              </View>
+            )}
+            <Text style={styles.freqResult}>
+              {selectedGoal?.id === 'custom'
+                ? customMiles
+                  ? `Custom goal: ${customMiles} miles${maxCustom ? ` (max ${maxCustom})` : ''}`
+                  : `Enter your target distance${maxCustom ? ` — up to ${maxCustom} mi` : ''}`
+                : selectedGoal ? `Target: ${selectedGoal.targetMi} miles · ${customWeeks} weeks` : ''}
+            </Text>
           </View>
-        ))}
+          );
+        })()}
+
+        {/* Weekly plan — adapts to chosen sessions/week */}
+        <Text style={styles.sectionTitle}>Weekly Plan</Text>
+        {Array.from({ length: customWeeks }, (_, i) => {
+          const origIdx = Math.floor(i * path.weeklyPlan.length / customWeeks);
+          const orig = path.weeklyPlan[origIdx];
+          return (
+            <View key={i} style={styles.weekRow}>
+              <View style={[styles.weekBadge, { borderColor: path.color }]}>
+                <Text style={[styles.weekNum, { color: path.color }]}>W{i + 1}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.weekDesc}>{orig.description}</Text>
+                <Text style={styles.weekMeta}>
+                  {sessionsPerWeek}× per week · {orig.minDuration}+ min
+                  {orig.targetMi ? `  ·  ${orig.targetMi} mi target` : ''}
+                </Text>
+              </View>
+            </View>
+          );
+        })}
+
+        {/* Session frequency picker */}
+        {!hasActivePath && (
+          <View style={styles.freqCard}>
+            <Text style={styles.freqTitle}>Sessions per week</Text>
+            <View style={styles.freqRow}>
+              {[1, 2, 3, 4].map(n => {
+                const isDefault = n === defaultSPW;
+                const selected = sessionsPerWeek === n;
+                return (
+                  <TouchableOpacity
+                    key={n}
+                    style={[styles.freqPill, selected && { backgroundColor: `${path.color}22`, borderColor: path.color }]}
+                    onPress={() => setSessionsPerWeek(n)}
+                  >
+                    <Text style={[styles.freqPillNum, selected && { color: path.color }]}>{n}x</Text>
+                    {isDefault && <Text style={styles.freqPillRec}>rec.</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <Text style={styles.freqResult}>
+              {(() => {
+                const isLongGoal = (selectedGoal?.extraWeeks ?? 0) > 0;
+                const isLongerGoal = (selectedGoal?.extraWeeks ?? 0) > 0;
+                if (sessionsPerWeek === 1 && isLongerGoal)
+                  return `⚠️ 1x/week for ${selectedGoal?.label} is very ambitious — consider starting with 5K or increasing to 2x/week`;
+                if (sessionsPerWeek === 1)
+                  return `⚠️ 1x/week is slow — we suggest ${defaultSPW}x for best results`;
+                if (sessionsPerWeek < defaultSPW && isLongerGoal)
+                  return `${customWeeks} weeks — totally doable, just a longer journey 💪`;
+                if (sessionsPerWeek === defaultSPW)
+                  return `${customWeeks} weeks — recommended pace`;
+                return `${customWeeks} weeks at your pace`;
+              })()}
+            </Text>
+          </View>
+        )}
 
         {/* CTA */}
         <View style={{ height: 32 }} />
-        {hasActivePath ? (
+        {hasActivePath && !fromCompletion ? (
           <TouchableOpacity
             style={styles.continueBtn}
             onPress={() => navigation.replace('PathProgress', { pathId })}
@@ -93,7 +240,7 @@ export default function PathDetailScreen({ navigation, route }: Props) {
             <Text style={styles.continueBtnText}>Continue My Progress →</Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity style={styles.startBtnWrapper} onPress={handleStart} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.startBtnWrapper} onPress={handleStartTap} activeOpacity={0.85}>
             <LinearGradient
               colors={['#00BFFF', '#00E5CC', '#39FF14']}
               start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
@@ -104,6 +251,38 @@ export default function PathDetailScreen({ navigation, route }: Props) {
         )}
         <View style={{ height: 48 }} />
       </ScrollView>
+
+      {/* Health & Safety Disclaimer */}
+      <Modal visible={showDisclaimer} transparent animationType="fade" onRequestClose={() => setShowDisclaimer(false)}>
+        <View style={styles.disclaimerOverlay}>
+          <View style={styles.disclaimerCard}>
+            <Text style={styles.disclaimerEmoji}>⚠️</Text>
+            <Text style={styles.disclaimerTitle}>Before You Start</Text>
+            <Text style={styles.disclaimerBody}>
+              {`This training plan is for general fitness purposes only and is NOT a substitute for professional medical advice.\n\n`}
+              {`• Consult a doctor before starting any new exercise program, especially if you have any medical conditions.\n`}
+              {`• Stop immediately and seek medical attention if you experience pain, dizziness, or shortness of breath.\n`}
+              {`• Progress at your own pace — it's okay to repeat weeks.\n`}
+              {`• Warm up before and cool down after every session.\n\n`}
+              {`By continuing, you acknowledge these risks and accept full responsibility for your training.`}
+            </Text>
+            <TouchableOpacity
+              style={styles.disclaimerBtn}
+              onPress={async () => {
+                await AsyncStorage.setItem('@42_path_disclaimer_seen', 'true');
+                setShowDisclaimer(false);
+                await doStart();
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.disclaimerBtnText}>I Understand — Let's Go</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowDisclaimer(false)} style={{ marginTop: 12 }}>
+              <Text style={styles.disclaimerCancel}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -159,4 +338,51 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,229,204,0.08)',
   },
   continueBtnText: { color: '#00E5CC', fontSize: 17, fontWeight: '700' },
+
+  // Disclaimer modal
+  disclaimerOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'center', alignItems: 'center', padding: 24,
+  },
+  disclaimerCard: {
+    backgroundColor: '#041428', borderRadius: 24, padding: 28,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+    maxHeight: '85%',
+  },
+  disclaimerEmoji: { fontSize: 40, textAlign: 'center', marginBottom: 12 },
+  disclaimerTitle: { fontSize: 22, fontWeight: '900', color: '#fff', textAlign: 'center', marginBottom: 16 },
+  disclaimerBody: { fontSize: 14, color: 'rgba(255,255,255,0.6)', lineHeight: 22, marginBottom: 24 },
+  disclaimerBtn: {
+    backgroundColor: '#00E5CC', borderRadius: 14,
+    paddingVertical: 14, alignItems: 'center',
+  },
+  disclaimerBtnText: { color: '#020B18', fontSize: 16, fontWeight: '800' },
+  disclaimerCancel: { color: 'rgba(255,255,255,0.3)', fontSize: 14, textAlign: 'center' },
+
+  // Frequency picker
+  freqCard: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    marginBottom: 4,
+  },
+  freqTitle: { fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.5)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 14 },
+  freqRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+  freqPill: {
+    flex: 1, alignItems: 'center', paddingVertical: 14,
+    borderRadius: 14, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  freqPillNum: { fontSize: 20, fontWeight: '800', color: 'rgba(255,255,255,0.5)', textAlign: 'center', lineHeight: 22 },
+  freqPillRec: { fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 2 },
+  freqResult: { fontSize: 13, color: 'rgba(255,255,255,0.4)', textAlign: 'center', lineHeight: 18 },
+  customInputRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  customInput: {
+    flex: 1, backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 10,
+    paddingHorizontal: 14, paddingVertical: 10, color: '#fff',
+    fontSize: 20, fontWeight: '700', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+  },
+  customInputUnit: { color: 'rgba(255,255,255,0.4)', fontSize: 16 },
 });

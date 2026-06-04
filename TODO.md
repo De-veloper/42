@@ -59,7 +59,7 @@
 
 ## 💡 Ideas from v1 (build after using it)
 
-- User name personalisation on home screen greeting
+- ✅ User name personalisation on home screen greeting
 - Rest day notes ("Sore legs", "Travel day")
 - Export workout history as CSV
 - Share individual workout cards (not just the score card)
