@@ -64,3 +64,5 @@ npx expo run:android
 How to test:
 demo.2weeks and press return 2 weeks into the challenge
 demo.42days and press return 42-day challenge complete
+demo.42days and press return 5K path complete, 10K unlocked
+demo.25mi and press return 25mi ride done, 50mi unlocked
