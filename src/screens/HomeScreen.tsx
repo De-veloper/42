@@ -352,6 +352,9 @@ export default function HomeScreen({ navigation }: Props) {
                 <Text style={styles.completedSub}>
                   Final score: {score.total} · {score.level}
                 </Text>
+                <Text style={[styles.completedSub, { marginTop: 8, opacity: 0.5 }]}>
+                  Go to Settings to start a new challenge.
+                </Text>
               </View>
             )}
 

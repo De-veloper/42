@@ -60,3 +60,7 @@ When test on Android
 
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17
 npx expo run:android
+
+How to test:
+demo.2weeks and press return 2 weeks into the challenge
+demo.42days and press return 42-day challenge complete
