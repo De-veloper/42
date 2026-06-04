@@ -53,6 +53,44 @@ export default function SettingsScreen({ navigation }: Props) {
     await AsyncStorage.setItem(NAME_KEY, value);
   };
 
+  // Hidden demo triggers for App Store review — type these as name then tap away
+  const handleNameBlur = async (value: string) => {
+    const trigger = value.toLowerCase().trim();
+    const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+    if (trigger === 'demo.2weeks') {
+      const DAYS = 14;
+      const start = new Date(); start.setDate(start.getDate() - (DAYS - 1));
+      await resetAll(); await resetMilestones();
+      await saveStartDate(fmt(start)); await saveProgramStarted(true);
+      const types = ['Run','Gym','Walk','Run','Gym','Ride','Yoga'];
+      for (let day = 1; day <= DAYS; day++) {
+        if ([4,7,11].includes(day)) continue;
+        const date = new Date(start); date.setDate(start.getDate() + (day - 1));
+        const type = types[(day-1)%types.length];
+        await saveWorkout({ id:`d2w-${day}`, date:fmt(date), dayNumber:day, type, duration:25+Math.floor(Math.random()*25), feeling:Math.min(5,3+Math.floor(day/6)), notes:'' });
+      }
+      setName(''); await AsyncStorage.removeItem(NAME_KEY);
+      Alert.alert('Demo: 2 Weeks', 'Loaded 2 weeks of progress. Check the Home screen.');
+
+    } else if (trigger === 'demo.42days') {
+      const start = new Date(); start.setDate(start.getDate() - 41);
+      await resetAll(); await resetMilestones();
+      await saveStartDate(fmt(start)); await saveProgramStarted(true);
+      const types = ['Run','Gym','Ride','Walk','Yoga','Gym','Run','Swim'];
+      const skipDays = new Set([6,13,20,27,34]);
+      for (let day = 1; day <= 42; day++) {
+        if (skipDays.has(day)) continue;
+        const date = new Date(start); date.setDate(start.getDate() + (day-1));
+        const type = types[(day-1)%types.length];
+        const dur = 20+Math.floor(Math.sin(day*0.4)*15+Math.random()*25);
+        await saveWorkout({ id:`d42-${day}`, date:fmt(date), dayNumber:day, type, duration:dur, feeling:Math.min(5,Math.max(1,2+Math.floor(day/10))), notes:'' });
+      }
+      setName(''); await AsyncStorage.removeItem(NAME_KEY);
+      Alert.alert('Demo: 42 Days Complete', 'Challenge complete! Check the Home screen.');
+    }
+  };
+
   const handleChangeReminder = async (hour: number) => {
     setReminderHour(hour);
     await saveReminderTime(hour, 0);
@@ -75,66 +113,6 @@ export default function SettingsScreen({ navigation }: Props) {
             await resetMilestones();
             await clearActivePath();
             navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] });
-          },
-        },
-      ]
-    );
-  };
-
-  const handleLoadMockData = () => {
-    Alert.alert(
-      'Load Test Data',
-      'This will reset your current data and fill 42 days with sample workouts for testing. Continue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Load Mock Data',
-          onPress: async () => {
-            await resetAll();
-            await resetMilestones();
-            await clearActivePath();
-
-            // Start date = 42 days ago
-            const start = new Date();
-            start.setDate(start.getDate() - 41);
-            const fmt = (d: Date) =>
-              `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-
-            await saveStartDate(fmt(start));
-            await saveProgramStarted(true);
-
-            const types = ['Run','Gym','Ride','Walk','Yoga','Gym','Run','Swim'];
-            const notes = [
-              'Felt strong today!', 'Tough session but pushed through.',
-              'Beautiful morning run.', '', 'New personal best.',
-              '', 'Legs feeling heavy but showed up.', 'Easy recovery session.',
-            ];
-            // Skip days 6, 13, 20, 27, 34 (rest days — 5 rest days)
-            const restDays = new Set([6, 13, 20, 27, 34]);
-
-            for (let day = 1; day <= 42; day++) {
-              if (restDays.has(day)) continue;
-              const date = new Date(start);
-              date.setDate(start.getDate() + (day - 1));
-              const type = types[(day - 1) % types.length];
-              const duration = 20 + Math.floor(Math.sin(day * 0.4) * 15 + Math.random() * 25);
-              const feeling = Math.min(5, Math.max(1, 2 + Math.floor(day / 10) + (Math.random() > 0.7 ? 1 : 0)));
-              const note = day % 4 === 0 ? notes[day % notes.length] : '';
-              const distanceMi = (type === 'Run' || type === 'Ride') ? Math.round((duration * 0.075 + Math.random() * 1.5) * 100) / 100 : undefined;
-
-              await saveWorkout({
-                id: `mock-${day}-${Date.now()}`,
-                date: fmt(date),
-                dayNumber: day,
-                type,
-                duration,
-                feeling,
-                notes: note,
-                ...(distanceMi ? { distanceMi } : {}),
-              });
-            }
-
-            Alert.alert('Done!', '42 days of workouts loaded. Go explore the app!');
           },
         },
       ]
@@ -265,6 +243,8 @@ export default function SettingsScreen({ navigation }: Props) {
             style={styles.input}
             value={name}
             onChangeText={handleSaveName}
+            onBlur={() => handleNameBlur(name)}
+            onSubmitEditing={() => handleNameBlur(name)}
             placeholder="e.g. Alex"
             placeholderTextColor="rgba(255,255,255,0.25)"
             returnKeyType="done"
@@ -300,27 +280,6 @@ export default function SettingsScreen({ navigation }: Props) {
         </View>
 
         {/* Danger zone */}
-        {/* Developer tools — only visible in debug builds, hidden in App Store releases */}
-        {__DEV__ && (
-          <>
-            <Text style={[styles.sectionHeader, { color: '#8B5CF6' }]}>Developer</Text>
-            <TouchableOpacity style={styles.mockCard} onPress={handleLoadWeeksMockData} activeOpacity={0.8}>
-              <Text style={styles.mockTitle}>Load 2-Week Sample</Text>
-              <Text style={styles.mockSubtitle}>14 days of workouts — test progress chart mid-journey.</Text>
-            </TouchableOpacity>
-            <View style={{ height: 10 }} />
-            <TouchableOpacity style={styles.mockCard} onPress={handleLoadMockData} activeOpacity={0.8}>
-              <Text style={styles.mockTitle}>Load Full 42-Day Mock</Text>
-              <Text style={styles.mockSubtitle}>Complete 42 days — test milestones, completion screen, Journey Paths.</Text>
-            </TouchableOpacity>
-            <View style={{ height: 10 }} />
-            <TouchableOpacity style={styles.mockCard} onPress={handleLoadCompletedPath} activeOpacity={0.8}>
-              <Text style={styles.mockTitle}>Load Completed 5K Path</Text>
-              <Text style={styles.mockSubtitle}>Fills Run a 5K with all sessions complete — test Goal Achieved + share card.</Text>
-            </TouchableOpacity>
-          </>
-        )}
-
         <Text style={[styles.sectionHeader, { color: '#EF4444' }]}>Danger Zone</Text>
         <TouchableOpacity style={styles.resetCard} onPress={handleReset} activeOpacity={0.8}>
           <Text style={styles.resetTitle}>Reset Program</Text>
@@ -406,15 +365,6 @@ const styles = StyleSheet.create({
   pillTextActive: { color: '#00E5CC' },
   statusText: { fontSize: 15, color: '#fff', fontWeight: '600' },
 
-  mockCard: {
-    backgroundColor: 'rgba(139,92,246,0.08)',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(139,92,246,0.3)',
-  },
-  mockTitle: { fontSize: 15, fontWeight: '700', color: '#C4B5FD', marginBottom: 4 },
-  mockSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 18 },
   resetCard: {
     backgroundColor: 'rgba(239,68,68,0.08)',
     borderRadius: 16,
