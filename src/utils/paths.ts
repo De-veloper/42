@@ -122,12 +122,18 @@ export const ALL_PATHS: PathDefinition[] = [
   {
     id: 'swim_1k',
     icon: '🏊',
-    title: 'Swim 1km',
-    goal: 'Swim 0.6 miles',
-    goalDetail: 'Complete 1km (40 laps) of continuous swimming.',
+    title: 'Swimming Goal',
+    goal: 'Pick your distance',
+    goalDetail: 'Choose your swim goal and build up to continuous laps.',
     weeks: 6,
     color: '#8B5CF6',
     workoutType: 'Swim',
+    goalOptions: [
+      { id: '500m',   label: '500m',   targetMi: 0.31, extraWeeks: 0 },
+      { id: '1k',     label: '1 km',   targetMi: 0.62, extraWeeks: 2, requiresGoalId: 'swim_1k:500m' },
+      { id: '2k',     label: '2 km',   targetMi: 1.24, extraWeeks: 4, requiresGoalId: 'swim_1k:1k' },
+      { id: 'custom', label: 'Custom', targetMi: 0,    extraWeeks: 0 },
+    ],
     weeklyPlan: [
       { week: 1, sessions: 3, minDuration: 20, description: '200-300m per session, focus on technique' },
       { week: 2, sessions: 3, minDuration: 25, description: 'Build to 400m, work on breathing' },

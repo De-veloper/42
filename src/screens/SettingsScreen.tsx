@@ -53,6 +53,21 @@ export default function SettingsScreen({ navigation }: Props) {
     await AsyncStorage.setItem(NAME_KEY, value);
   };
 
+  // Loads a completed 42-day challenge in the background (needed by path demos)
+  const setup42DaysComplete = async (fmt: (d: Date) => string) => {
+    const challengeStart = new Date(); challengeStart.setDate(challengeStart.getDate() - 41);
+    await saveStartDate(fmt(challengeStart)); await saveProgramStarted(true);
+    const types = ['Run','Gym','Ride','Walk','Yoga','Gym','Run','Swim'];
+    const skipDays = new Set([6,13,20,27,34]);
+    for (let day = 1; day <= 42; day++) {
+      if (skipDays.has(day)) continue;
+      const date = new Date(challengeStart); date.setDate(challengeStart.getDate() + (day-1));
+      const type = types[(day-1)%types.length];
+      const dur = 20+Math.floor(Math.sin(day*0.4)*15+Math.random()*25);
+      await saveWorkout({ id:`bg42-${day}`, date:fmt(date), dayNumber:day, type, duration:dur, feeling:Math.min(5,Math.max(1,2+Math.floor(day/10))), notes:'' });
+    }
+  };
+
   // Hidden demo triggers for App Store review — type these as name then tap away
   const handleNameBlur = async (value: string) => {
     const trigger = value.toLowerCase().trim();
@@ -90,6 +105,8 @@ export default function SettingsScreen({ navigation }: Props) {
       Alert.alert('Demo: 42 Days Complete', 'Challenge complete! Check the Home screen.');
 
     } else if (trigger === 'demo.5k') {
+      await resetAll(); await resetMilestones(); await clearActivePath();
+      await setup42DaysComplete(fmt);
       const path = ALL_PATHS.find(p => p.id === 'run_5k')!;
       const totalSessions = path.weeklyPlan.reduce((s,w) => s+w.sessions, 0);
       const start = new Date(); start.setDate(start.getDate() - path.weeks*7 - 1);
@@ -113,6 +130,8 @@ export default function SettingsScreen({ navigation }: Props) {
       Alert.alert('Demo: 5K Complete', '10K is now unlocked. Open the path from home.');
 
     } else if (trigger === 'demo.25mi') {
+      await resetAll(); await resetMilestones(); await clearActivePath();
+      await setup42DaysComplete(fmt);
       const path = ALL_PATHS.find(p => p.id === 'ride_50k')!;
       const totalSessions = path.weeklyPlan.reduce((s,w) => s+w.sessions, 0);
       const start = new Date(); start.setDate(start.getDate() - path.weeks*7 - 1);
@@ -134,6 +153,31 @@ export default function SettingsScreen({ navigation }: Props) {
       await saveCompletedGoal('ride_50k', '25mi');
       setName(''); await AsyncStorage.removeItem(NAME_KEY);
       Alert.alert('Demo: 25mi Complete', '50mi ride is now unlocked. Open the path from home.');
+
+    } else if (trigger === 'demo.swim500') {
+      await resetAll(); await resetMilestones(); await clearActivePath();
+      await setup42DaysComplete(fmt);
+      const path = ALL_PATHS.find(p => p.id === 'swim_1k')!;
+      const totalSessions = path.weeklyPlan.reduce((s,w) => s+w.sessions, 0);
+      const start = new Date(); start.setDate(start.getDate() - path.weeks*7 - 1);
+      await startPath('swim_1k');
+      const raw = await AsyncStorage.getItem('@42_active_path');
+      if (raw) {
+        const paths = JSON.parse(raw);
+        const idx = paths.findIndex((p:any) => p.pathId === 'swim_1k');
+        if (idx >= 0) {
+          paths[idx].startDate = fmt(start);
+          paths[idx].selectedGoalId = '500m';
+          paths[idx].sessions = Array.from({length:totalSessions},(_,i) => {
+            const d = new Date(start); d.setDate(start.getDate()+Math.floor(i*path.weeks*7/totalSessions));
+            return {date:fmt(d), duration:25+Math.floor(Math.random()*20), distanceMi:parseFloat((0.1+i*0.015).toFixed(3))};
+          });
+          await AsyncStorage.setItem('@42_active_path', JSON.stringify(paths));
+        }
+      }
+      await saveCompletedGoal('swim_1k', '500m');
+      setName(''); await AsyncStorage.removeItem(NAME_KEY);
+      Alert.alert('Demo: 500m Swim Complete', '1km swim is now unlocked. Open the path from home.');
     }
   };
 

@@ -24,12 +24,12 @@
 - ✅ Home screen shows "Hi [Name]" if name is set in Settings
 - ✅ GPS distance in miles
 - ✅ Fitness score chart extends beyond Day 42
+- ✅ Swim goals: add custom distance similar to Run/Ride
 
 ## 🔧 Journey Paths — Still To Do
 
 - Auto-suggest path based on most-logged workout type (currently shows all equally)
 - Path-specific share card improvements (add distance/pace if GPS tracked)
-- Swim goals: add custom distance similar to Run/Ride
 
 ## 🏥 HealthKit (iOS) — Deferred
 
