@@ -17,7 +17,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../../App';
-import { saveWorkout, updateWorkout, loadData, getDayNumber, todayString, WorkoutEntry } from '../utils/storage';
+import { saveWorkout, updateWorkout, deleteWorkout, loadData, getDayNumber, todayString, WorkoutEntry } from '../utils/storage';
 import { WORKOUT_TYPES, FEELING_LABELS } from '../utils/fitnessScore';
 import { isReady, saveWorkoutToHealth, fetchWorkoutData } from '../utils/healthKit';
 import { logPathSession } from '../utils/paths';
@@ -197,6 +197,7 @@ export default function LogWorkoutScreen({ navigation, route }: Props) {
         const entry: WorkoutEntry = {
           id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
           date: todayString(),
+          timestamp: new Date().toISOString(),
           dayNumber,
           type: workoutType,
           duration: mins,
@@ -445,6 +446,29 @@ export default function LogWorkoutScreen({ navigation, route }: Props) {
               </Text>
             </View>
           </TouchableOpacity>
+
+          {/* Delete (edit mode only) */}
+          {isEditing && (
+            <TouchableOpacity
+              style={styles.deleteBtnWrapper}
+              activeOpacity={0.8}
+              onPress={() =>
+                Alert.alert('Delete workout?', 'This cannot be undone.', [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                      await deleteWorkout(existing.id);
+                      navigation.goBack();
+                    },
+                  },
+                ])
+              }
+            >
+              <Text style={styles.deleteBtnText}>Delete Workout</Text>
+            </TouchableOpacity>
+          )}
 
         </ScrollView>
       </KeyboardAvoidingView>
@@ -695,4 +719,6 @@ const styles = StyleSheet.create({
   saveBtn: { paddingVertical: 18, alignItems: 'center', borderRadius: 16, backgroundColor: '#00E5CC' },
   saveBtnDisabled: { backgroundColor: '#1a1a2e' },
   saveBtnText: { color: '#020B18', fontSize: 17, fontWeight: '800' },
+  deleteBtnWrapper: { marginTop: 14, paddingVertical: 16, alignItems: 'center' },
+  deleteBtnText: { color: '#EF4444', fontSize: 15, fontWeight: '600' },
 });

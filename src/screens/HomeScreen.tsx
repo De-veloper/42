@@ -48,6 +48,7 @@ import {
   getDayNumber,
   resetAll,
   formatMins,
+  getToday,
   AppData,
   WorkoutEntry,
 } from "../utils/storage";
@@ -110,8 +111,9 @@ export default function HomeScreen({ navigation }: Props) {
   );
 
   const startProgram = async () => {
-    const d = new Date();
-    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+    const today = todayString();
+
     await saveStartDate(today);
     await saveProgramStarted(true);
     setData((prev) => ({ ...prev, startDate: today, programStarted: true }));
@@ -229,11 +231,9 @@ export default function HomeScreen({ navigation }: Props) {
               </Text>
             )}
             <Text style={styles.headerDate}>
-              {new Date().toLocaleDateString("en-US", {
-                weekday: "short",
-                month: "short",
-                day: "numeric",
-              })}
+
+              {getToday().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+
             </Text>
           </View>
           <View style={styles.headerActions}>
@@ -602,7 +602,7 @@ export default function HomeScreen({ navigation }: Props) {
                   /* ── WORKOUTS LOGGED ── */
                   <>
                     {todayWorkouts.map((w) => (
-                      <TodayWorkoutRow key={w.id} workout={w} />
+                      <TodayWorkoutRow key={w.id} workout={w} onPress={() => navigation.navigate('LogWorkout', { workout: w })} />
                     ))}
                     <TouchableOpacity
                       style={styles.addMoreBtn}
@@ -787,18 +787,24 @@ export default function HomeScreen({ navigation }: Props) {
   );
 }
 
-function TodayWorkoutRow({ workout }: { workout: WorkoutEntry }) {
+function TodayWorkoutRow({ workout, onPress }: { workout: WorkoutEntry; onPress: () => void }) {
   const icon =
     WORKOUT_TYPES.find((t) => t.label === workout.type)?.icon ?? "⚡";
   const feeling = FEELING_LABELS[workout.feeling];
+  const timeStr = workout.timestamp
+    ? new Date(workout.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+    : null;
   return (
-    <View style={styles.todayRow}>
+    <TouchableOpacity style={styles.todayRow} onPress={onPress} activeOpacity={0.75}>
       <Text style={styles.todayRowIcon}>{icon}</Text>
       <View style={{ flex: 1 }}>
         <Text style={styles.todayRowType}>
           {workout.type}{" "}
           <Text style={styles.todayRowDuration}>{workout.duration} min</Text>
         </Text>
+        {timeStr && (
+          <Text style={styles.todayRowTime}>{timeStr}</Text>
+        )}
         {workout.notes ? (
           <Text style={styles.todayRowNotes} numberOfLines={1}>
             {workout.notes}
@@ -808,7 +814,7 @@ function TodayWorkoutRow({ workout }: { workout: WorkoutEntry }) {
       <Text style={[styles.todayRowFeeling, { color: feeling.color }]}>
         {feeling.emoji}
       </Text>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -1393,6 +1399,7 @@ const styles = StyleSheet.create({
   todayRowIcon: { fontSize: 22 },
   todayRowType: { fontSize: 15, fontWeight: "700", color: "#fff" },
   todayRowDuration: { color: "#00E5CC", fontWeight: "700" },
+  todayRowTime: { color: "rgba(255,255,255,0.35)", fontSize: 11, marginTop: 1 },
   todayRowNotes: { color: "rgba(255,255,255,0.4)", fontSize: 12, marginTop: 2 },
   todayRowFeeling: { fontSize: 14, fontWeight: "600" },
   dayBadgeText: {

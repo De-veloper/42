@@ -67,3 +67,7 @@ demo.42days and press return 42-day challenge complete
 demo.5k and press return 5K path complete, 10K unlocked
 demo.25mi and press return 25mi ride done, 50mi unlocked
 demo.swim500 and press return 500m swim done, 1km unlocked
+demo.day=N and press return, it will forward to the day N
+
+npx expo run:ios --device
+
