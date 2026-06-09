@@ -337,7 +337,11 @@ export default function HistoryScreen({ navigation }: Props) {
               overshootLeft={false}
               overshootRight={false}
             >
-              <View style={styles.workoutCard}>
+              <TouchableOpacity
+                style={styles.workoutCard}
+                onPress={() => navigation.navigate('LogWorkout', { workout: item })}
+                activeOpacity={0.75}
+              >
                 <View style={styles.cardAccent} />
                 <View style={styles.cardBody}>
                   <View style={styles.cardTop}>
@@ -347,6 +351,11 @@ export default function HistoryScreen({ navigation }: Props) {
                       <View style={styles.dayBadge}>
                         <Text style={styles.dayBadgeText}>Day {item.dayNumber}</Text>
                       </View>
+                      {item.timestamp && (
+                        <Text style={styles.cardTime}>
+                          {new Date(item.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                        </Text>
+                      )}
                     </View>
                     <Text style={[styles.cardFeeling, { color: feeling.color }]}>
                       {feeling.emoji} {feeling.label}
@@ -367,7 +376,7 @@ export default function HistoryScreen({ navigation }: Props) {
                     ) : null}
                   </View>
                 </View>
-              </View>
+              </TouchableOpacity>
             </Swipeable>
           );
         }}
@@ -554,6 +563,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   dayBadgeText: { color: "#00BFFF", fontSize: 11, fontWeight: "700" },
+  cardTime: { color: "rgba(255,255,255,0.35)", fontSize: 11, fontWeight: "500" },
   cardFeeling: { fontSize: 13, fontWeight: "600" },
   cardStats: { flexDirection: "row", alignItems: "center", gap: 12 },
   cardDuration: { color: "#00E5CC", fontSize: 18, fontWeight: "800" },

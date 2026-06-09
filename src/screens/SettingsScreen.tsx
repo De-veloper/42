@@ -12,7 +12,7 @@ import {
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { resetAll, loadRestDays, saveWorkout, saveStartDate, saveProgramStarted } from '../utils/storage';
+import { resetAll, loadRestDays, saveWorkout, saveStartDate, saveProgramStarted, setDemoDate, clearDemoDate } from '../utils/storage';
 import {
   requestNotificationPermission,
   scheduleDailyReminder,
@@ -87,6 +87,29 @@ export default function SettingsScreen({ navigation }: Props) {
       }
       setName(''); await AsyncStorage.removeItem(NAME_KEY);
       Alert.alert('Demo: 42 Days Complete', 'Challenge complete! Check the Home screen.');
+
+    } else if (trigger.startsWith('demo.day=')) {
+      const n = parseInt(trigger.slice('demo.day='.length), 10);
+      if (!isNaN(n) && n >= 1 && n <= 42) {
+        // Keep the original signup date as Day 1.
+        // Store a simulated "today" = signupDate + (N-1) days so the app
+        // thinks it's a later date without changing the real start date.
+        const existingStart = await AsyncStorage.getItem('@42_start_date');
+        const signupDateStr = existingStart ?? fmt(new Date());
+        if (!existingStart) {
+          await saveStartDate(signupDateStr);
+          await saveProgramStarted(true);
+        }
+        const simDate = new Date(signupDateStr + 'T00:00:00');
+        simDate.setDate(simDate.getDate() + (n - 1));
+        await setDemoDate(fmt(simDate));
+        setName(''); await AsyncStorage.removeItem(NAME_KEY);
+        Alert.alert(`Demo: Day ${n}`, `Simulating ${fmt(simDate)} — Day ${n}. Existing workouts preserved.`);
+      }
+    } else if (trigger === 'demo.clear') {
+      await clearDemoDate();
+      setName(''); await AsyncStorage.removeItem(NAME_KEY);
+      Alert.alert('Demo cleared', 'Back to real date.');
     }
   };
 
