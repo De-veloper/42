@@ -1,10 +1,20 @@
 import sharp from 'sharp';
 import { mkdirSync } from 'fs';
 
-mkdirSync('./assets/screenshots', { recursive: true });
+mkdirSync('./screenshots/ios/1242x2688', { recursive: true });
+mkdirSync('./screenshots/ios/1284x2778', { recursive: true });
 
 const W = 1284;
 const H = 2778;
+
+async function save(svg, name) {
+  const buf = Buffer.from(svg);
+  await Promise.all([
+    sharp(buf).png().toFile(`./screenshots/ios/1284x2778/${name}.png`),
+    sharp(buf).resize(1242, 2688).png().toFile(`./screenshots/ios/1242x2688/${name}.png`),
+  ]);
+  console.log(`✅ ${name}.png`);
+}
 const BG = '#020B18';
 const TEAL = '#00E5CC';
 const BLUE = '#00BFFF';
@@ -94,8 +104,7 @@ async function screen1() {
 
     ${label('Track your 42-day transformation',W/2,1540)}
   `);
-  await sharp(Buffer.from(svg)).png().toFile('./assets/screenshots/01-home.png');
-  console.log('✅ 01-home.png');
+  await save(svg, '01-home');
 }
 
 // ─── Screen 2: Log Workout ───────────────────────────────────────────────────
@@ -142,8 +151,7 @@ async function screen2() {
 
     ${label('Log every session, stay consistent',W/2,1460)}
   `);
-  await sharp(Buffer.from(svg)).png().toFile('./assets/screenshots/02-log.png');
-  console.log('✅ 02-log.png');
+  await save(svg, '02-log');
 }
 
 // ─── Screen 3: History + Calendar ────────────────────────────────────────────
@@ -185,8 +193,7 @@ async function screen3() {
 
     ${label('Your complete workout history',W/2,1508)}
   `);
-  await sharp(Buffer.from(svg)).png().toFile('./assets/screenshots/03-history.png');
-  console.log('✅ 03-history.png');
+  await save(svg, '03-history');
 }
 
 // ─── Screen 4: Milestones ────────────────────────────────────────────────────
@@ -229,8 +236,7 @@ async function screen4() {
 
     ${label('Stay motivated, earn every badge',W/2,1572)}
   `);
-  await sharp(Buffer.from(svg)).png().toFile('./assets/screenshots/04-milestones.png');
-  console.log('✅ 04-milestones.png');
+  await save(svg, '04-milestones');
 }
 
 // ─── Screen 5: Progress Chart ────────────────────────────────────────────────
@@ -285,9 +291,74 @@ async function screen5() {
 
     ${label('Watch your fitness score climb',W/2,1578)}
   `);
-  await sharp(Buffer.from(svg)).png().toFile('./assets/screenshots/05-progress.png');
-  console.log('✅ 05-progress.png');
+  await save(svg, '05-progress');
 }
 
-await Promise.all([screen1(), screen2(), screen3(), screen4(), screen5()]);
+// ─── Screen 6: Journey Paths ─────────────────────────────────────────────────
+async function screen6() {
+  const paths = [
+    { icon: '🏃', title: 'Running Goal', opts: ['5K','10K','Half Marathon'], color: TEAL, active: true },
+    { icon: '🚴', title: 'Riding Goal',  opts: ['25 mi','50 mi','Century'],  color: BLUE, active: false },
+    { icon: '🏊', title: 'Swimming Goal',opts: ['500m','1 km','2 km'],        color: GREEN, active: false },
+  ];
+
+  // progress arc for the active path (5K, 68% done)
+  const cx = W/2, cy = 690, r = 200, sw = 20;
+  const circ = 2 * Math.PI * r, arc = circ * 0.75;
+  const progress = 0.68;
+
+  const svg = base(`
+    ${t('9:41', 80, 80, 44, '#fff', '600', 'start')}
+    ${t('Journey Paths', W/2, 178, 52, '#fff', '900')}
+    ${t('Set a goal. Train toward it.', W/2, 226, 32, 'rgba(255,255,255,0.4)', '400')}
+
+    <!-- Active path card (Running / 5K) -->
+    ${card(60, 262, W-120, 530, 32, 'rgba(0,229,204,0.08)', 'rgba(0,229,204,0.4)')}
+
+    <!-- progress ring -->
+    <circle cx="${cx}" cy="${cy}" r="${r}" stroke="rgba(255,255,255,0.07)" stroke-width="${sw}" fill="none"
+      stroke-dasharray="${arc} ${circ-arc}" stroke-linecap="round" transform="rotate(135 ${cx} ${cy})"/>
+    <circle cx="${cx}" cy="${cy}" r="${r}" stroke="${TEAL}" stroke-width="${sw}" fill="none"
+      stroke-dasharray="${(arc*progress).toFixed(1)} ${(circ-arc*progress).toFixed(1)}" stroke-linecap="round"
+      transform="rotate(135 ${cx} ${cy})" filter="url(#glow)"/>
+    ${t('RUN', cx, cy-10, 52, TEAL, '900')}
+    ${t('68%', cx, cy+52, 62, '#fff', '900')}
+    ${t('toward your 5K', cx, cy+96, 28, 'rgba(255,255,255,0.45)', '500')}
+
+    <!-- week plan label -->
+    ${t('WEEK 5 OF 8', W/2, 836, 26, 'rgba(255,255,255,0.35)', '700')}
+    ${t('3 runs  30 min each  push for 2.5 mi', W/2, 870, 27, 'rgba(255,255,255,0.55)', '500')}
+
+    <!-- week day dots: 3 done -->
+    ${[0,1,2].map(i => {
+      const x = W/2 - 60 + i*60;
+      return `<circle cx="${x}" cy="912" r="16" fill="${TEAL}" opacity="0.9"/>
+        ${t('OK', x, 917, 16, BG, '900')}`;
+    }).join('')}
+
+    <!-- milestones row -->
+    ${card(60, 950, W-120, 130, 24, 'rgba(255,255,255,0.04)')}
+    ${[['1st','First Steps',true],['1mi','One Mile',true],['W1','Week 1',true],['1/2','Halfway',false],['3mi','3 Miles',false],['5K','5K Done',false]].map(([sym,l,done],i) => {
+      const x = 100 + i*188;
+      return `<rect x="${x-28}" y="966" width="56" height="38" rx="10"
+          fill="${done?'rgba(0,229,204,0.2)':'rgba(255,255,255,0.06)'}"/>
+        ${t(sym, x, 991, 20, done?TEAL:'rgba(255,255,255,0.25)', done?'700':'500')}
+        ${t(l, x, 1046, 19, done?'rgba(255,255,255,0.7)':'rgba(255,255,255,0.25)', done?'600':'400')}`;
+    }).join('')}
+
+    <!-- other path cards -->
+    ${paths.filter((_,i)=>i>0).map((p, i) => {
+      const y = 1108 + i * 190;
+      return `${card(60, y, W-120, 162, 24, 'rgba(255,255,255,0.04)')}
+        ${t(p.title, 140, y+62, 34, '#fff', '700', 'start')}
+        ${t(p.opts.join(' / '), 140, y+104, 26, 'rgba(255,255,255,0.35)', '500', 'start')}
+        ${t(i===0?'Unlock after 5K':'Unlock after 25 mi', W-90, y+80, 24, 'rgba(255,255,255,0.25)', '400', 'end')}`;
+    }).join('')}
+
+    ${label('New in v1.5 — pick your distance goal', W/2, 1500)}
+  `);
+  await save(svg, '06-paths');
+}
+
+await Promise.all([screen1(), screen2(), screen3(), screen4(), screen5(), screen6()]);
 console.log('\nAll screenshots saved to assets/screenshots/');
