@@ -317,15 +317,6 @@ export default function HistoryScreen({ navigation }: Props) {
           const feeling = FEELING_LABELS[item.feeling];
           return (
             <Swipeable
-              renderLeftActions={() => (
-                <TouchableOpacity
-                  style={styles.editAction}
-                  onPress={() => navigation.navigate('LogWorkout', { workout: item })}
-                >
-                  <Text style={styles.editActionText}>✏️</Text>
-                  <Text style={styles.editActionLabel}>Edit</Text>
-                </TouchableOpacity>
-              )}
               renderRightActions={() => (
                 <TouchableOpacity
                   style={styles.deleteAction}
@@ -335,7 +326,6 @@ export default function HistoryScreen({ navigation }: Props) {
                   <Text style={styles.deleteActionLabel}>Delete</Text>
                 </TouchableOpacity>
               )}
-              overshootLeft={false}
               overshootRight={false}
             >
               <TouchableOpacity
@@ -575,18 +565,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
-
-  // Swipe edit
-  editAction: {
-    backgroundColor: '#00E5CC',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 80,
-    borderRadius: 16,
-    marginBottom: 10,
-  },
-  editActionText: { fontSize: 20 },
-  editActionLabel: { color: '#020B18', fontSize: 11, fontWeight: '700', marginTop: 2 },
 
   // Calendar
   calendar: {
