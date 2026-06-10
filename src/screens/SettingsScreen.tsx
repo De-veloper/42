@@ -12,7 +12,10 @@ import {
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+import { ALL_PATHS, startPath, logPathSession, saveCompletedGoal, clearActivePath } from '../utils/paths';
 import { resetAll, loadRestDays, saveWorkout, saveStartDate, saveProgramStarted, setDemoDate, clearDemoDate } from '../utils/storage';
+
 import {
   requestNotificationPermission,
   scheduleDailyReminder,
@@ -52,6 +55,21 @@ export default function SettingsScreen({ navigation }: Props) {
     await AsyncStorage.setItem(NAME_KEY, value);
   };
 
+  // Loads a completed 42-day challenge in the background (needed by path demos)
+  const setup42DaysComplete = async (fmt: (d: Date) => string) => {
+    const challengeStart = new Date(); challengeStart.setDate(challengeStart.getDate() - 41);
+    await saveStartDate(fmt(challengeStart)); await saveProgramStarted(true);
+    const types = ['Run','Gym','Ride','Walk','Yoga','Gym','Run','Swim'];
+    const skipDays = new Set([6,13,20,27,34]);
+    for (let day = 1; day <= 42; day++) {
+      if (skipDays.has(day)) continue;
+      const date = new Date(challengeStart); date.setDate(challengeStart.getDate() + (day-1));
+      const type = types[(day-1)%types.length];
+      const dur = 20+Math.floor(Math.sin(day*0.4)*15+Math.random()*25);
+      await saveWorkout({ id:`bg42-${day}`, date:fmt(date), dayNumber:day, type, duration:dur, feeling:Math.min(5,Math.max(1,2+Math.floor(day/10))), notes:'' });
+    }
+  };
+
   // Hidden demo triggers for App Store review — type these as name then tap away
   const handleNameBlur = async (value: string) => {
     const trigger = value.toLowerCase().trim();
@@ -60,7 +78,7 @@ export default function SettingsScreen({ navigation }: Props) {
     if (trigger === 'demo.2weeks') {
       const DAYS = 14;
       const start = new Date(); start.setDate(start.getDate() - (DAYS - 1));
-      await resetAll(); await resetMilestones();
+      await resetAll(); await resetMilestones(); await clearActivePath();
       await saveStartDate(fmt(start)); await saveProgramStarted(true);
       const types = ['Run','Gym','Walk','Run','Gym','Ride','Yoga'];
       for (let day = 1; day <= DAYS; day++) {
@@ -74,7 +92,7 @@ export default function SettingsScreen({ navigation }: Props) {
 
     } else if (trigger === 'demo.42days') {
       const start = new Date(); start.setDate(start.getDate() - 41);
-      await resetAll(); await resetMilestones();
+      await resetAll(); await resetMilestones(); await clearActivePath();
       await saveStartDate(fmt(start)); await saveProgramStarted(true);
       const types = ['Run','Gym','Ride','Walk','Yoga','Gym','Run','Swim'];
       const skipDays = new Set([6,13,20,27,34]);
@@ -87,6 +105,81 @@ export default function SettingsScreen({ navigation }: Props) {
       }
       setName(''); await AsyncStorage.removeItem(NAME_KEY);
       Alert.alert('Demo: 42 Days Complete', 'Challenge complete! Check the Home screen.');
+
+    } else if (trigger === 'demo.5k') {
+      await resetAll(); await resetMilestones(); await clearActivePath();
+      await setup42DaysComplete(fmt);
+      const path = ALL_PATHS.find(p => p.id === 'run_5k')!;
+      const totalSessions = path.weeklyPlan.reduce((s,w) => s+w.sessions, 0);
+      const start = new Date(); start.setDate(start.getDate() - path.weeks*7 - 1);
+      await startPath('run_5k');
+      const raw = await AsyncStorage.getItem('@42_active_path');
+      if (raw) {
+        const paths = JSON.parse(raw);
+        const idx = paths.findIndex((p:any) => p.pathId === 'run_5k');
+        if (idx >= 0) {
+          paths[idx].startDate = fmt(start);
+          paths[idx].selectedGoalId = '5k';
+          paths[idx].sessions = Array.from({length:totalSessions},(_,i) => {
+            const d = new Date(start); d.setDate(start.getDate()+Math.floor(i*path.weeks*7/totalSessions));
+            return {date:fmt(d), duration:25+Math.floor(Math.random()*20), distanceMi:parseFloat((1.5+i*0.1).toFixed(2))};
+          });
+          await AsyncStorage.setItem('@42_active_path', JSON.stringify(paths));
+        }
+      }
+      await saveCompletedGoal('run_5k', '5k');
+      setName(''); await AsyncStorage.removeItem(NAME_KEY);
+      Alert.alert('Demo: 5K Complete', '10K is now unlocked. Open the path from home.');
+
+    } else if (trigger === 'demo.25mi') {
+      await resetAll(); await resetMilestones(); await clearActivePath();
+      await setup42DaysComplete(fmt);
+      const path = ALL_PATHS.find(p => p.id === 'ride_50k')!;
+      const totalSessions = path.weeklyPlan.reduce((s,w) => s+w.sessions, 0);
+      const start = new Date(); start.setDate(start.getDate() - path.weeks*7 - 1);
+      await startPath('ride_50k');
+      const raw = await AsyncStorage.getItem('@42_active_path');
+      if (raw) {
+        const paths = JSON.parse(raw);
+        const idx = paths.findIndex((p:any) => p.pathId === 'ride_50k');
+        if (idx >= 0) {
+          paths[idx].startDate = fmt(start);
+          paths[idx].selectedGoalId = '25mi';
+          paths[idx].sessions = Array.from({length:totalSessions},(_,i) => {
+            const d = new Date(start); d.setDate(start.getDate()+Math.floor(i*path.weeks*7/totalSessions));
+            return {date:fmt(d), duration:45+Math.floor(Math.random()*30), distanceMi:parseFloat((5+i*1.5).toFixed(2))};
+          });
+          await AsyncStorage.setItem('@42_active_path', JSON.stringify(paths));
+        }
+      }
+      await saveCompletedGoal('ride_50k', '25mi');
+      setName(''); await AsyncStorage.removeItem(NAME_KEY);
+      Alert.alert('Demo: 25mi Complete', '50mi ride is now unlocked. Open the path from home.');
+
+    } else if (trigger === 'demo.swim500') {
+      await resetAll(); await resetMilestones(); await clearActivePath();
+      await setup42DaysComplete(fmt);
+      const path = ALL_PATHS.find(p => p.id === 'swim_1k')!;
+      const totalSessions = path.weeklyPlan.reduce((s,w) => s+w.sessions, 0);
+      const start = new Date(); start.setDate(start.getDate() - path.weeks*7 - 1);
+      await startPath('swim_1k');
+      const raw = await AsyncStorage.getItem('@42_active_path');
+      if (raw) {
+        const paths = JSON.parse(raw);
+        const idx = paths.findIndex((p:any) => p.pathId === 'swim_1k');
+        if (idx >= 0) {
+          paths[idx].startDate = fmt(start);
+          paths[idx].selectedGoalId = '500m';
+          paths[idx].sessions = Array.from({length:totalSessions},(_,i) => {
+            const d = new Date(start); d.setDate(start.getDate()+Math.floor(i*path.weeks*7/totalSessions));
+            return {date:fmt(d), duration:25+Math.floor(Math.random()*20), distanceMi:parseFloat((0.1+i*0.015).toFixed(3))};
+          });
+          await AsyncStorage.setItem('@42_active_path', JSON.stringify(paths));
+        }
+      }
+      await saveCompletedGoal('swim_1k', '500m');
+      setName(''); await AsyncStorage.removeItem(NAME_KEY);
+      Alert.alert('Demo: 500m Swim Complete', '1km swim is now unlocked. Open the path from home.');
 
     } else if (trigger.startsWith('demo.day=')) {
       const n = parseInt(trigger.slice('demo.day='.length), 10);
@@ -133,6 +226,7 @@ export default function SettingsScreen({ navigation }: Props) {
             await resetAll();
             await cancelReminders();
             await resetMilestones();
+            await clearActivePath();
             navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] });
           },
         },
@@ -140,6 +234,104 @@ export default function SettingsScreen({ navigation }: Props) {
     );
   };
 
+  const handleLoadWeeksMockData = () => {
+    Alert.alert(
+      'Load 2-Week Sample',
+      'Resets data and loads 2 weeks of workouts — good for testing the progress chart mid-journey.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Load',
+          onPress: async () => {
+            await resetAll();
+            await resetMilestones();
+            await clearActivePath();
+
+            const DAYS = 14;
+            const start = new Date();
+            start.setDate(start.getDate() - (DAYS - 1));
+            const fmt = (d: Date) =>
+              `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+            await saveStartDate(fmt(start));
+            await saveProgramStarted(true);
+
+            const types = ['Run','Gym','Walk','Run','Gym','Ride','Yoga'];
+            const restDays = new Set([4, 7, 11]);
+
+            for (let day = 1; day <= DAYS; day++) {
+              if (restDays.has(day)) continue;
+              const date = new Date(start);
+              date.setDate(start.getDate() + (day - 1));
+              const type = types[(day - 1) % types.length];
+              const duration = 25 + Math.floor(Math.random() * 25);
+              const feeling = 3 + Math.floor(day / 6);
+              const distanceMi = (type === 'Run' || type === 'Ride')
+                ? Math.round((duration * 0.075 + Math.random()) * 100) / 100
+                : undefined;
+              await saveWorkout({
+                id: `mock2w-${day}-${Date.now()}`,
+                date: fmt(date),
+                dayNumber: day,
+                type,
+                duration,
+                feeling: Math.min(feeling, 5),
+                notes: '',
+                ...(distanceMi ? { distanceMi } : {}),
+              });
+            }
+            Alert.alert('Done!', '2 weeks of workouts loaded.');
+          },
+        },
+      ]
+    );
+  };
+
+  const handleLoadCompletedPath = () => {
+    Alert.alert(
+      'Load Completed Path',
+      'Starts a Run a 5K path and fills it with enough sessions to trigger Goal Achieved.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Load',
+          onPress: async () => {
+            const path = ALL_PATHS.find(p => p.id === 'run_5k')!;
+            const totalSessions = path.weeklyPlan.reduce((s, w) => s + w.sessions, 0);
+            // Start date far enough back that all weeks have passed
+            const weeksNeeded = path.weeks;
+            const start = new Date();
+            start.setDate(start.getDate() - weeksNeeded * 7 - 1);
+            const fmt = (d: Date) =>
+              `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            await startPath('run_5k');
+            // Patch the start date directly in storage
+            const raw = await AsyncStorage.getItem('@42_active_path');
+            if (raw) {
+              const paths = JSON.parse(raw);
+              const idx = paths.findIndex((p: any) => p.pathId === 'run_5k');
+              if (idx >= 0) {
+                paths[idx].startDate = fmt(start);
+                // Add all required sessions spread across the weeks
+                const sessions = [];
+                for (let i = 0; i < totalSessions; i++) {
+                  const d = new Date(start);
+                  d.setDate(start.getDate() + Math.floor(i * weeksNeeded * 7 / totalSessions));
+                  sessions.push({ date: fmt(d), duration: 25 + Math.floor(Math.random() * 20), distanceMi: parseFloat((1.5 + i * 0.1).toFixed(2)) });
+                }
+                paths[idx].sessions = sessions;
+                paths[idx].selectedGoalId = '5k'; // mark as 5K goal
+                await AsyncStorage.setItem('@42_active_path', JSON.stringify(paths));
+              }
+            }
+            // Save 5K as completed so 10K unlocks
+            await saveCompletedGoal('run_5k', '5k');
+            Alert.alert('Done!', 'Run a 5K path loaded as complete. Open it from the home page banner. 10K is now unlocked!');
+          },
+        },
+      ]
+    );
+  };
 
   const hourLabel = (h: number) => h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`;
 

@@ -32,8 +32,8 @@ export default function ProgressChart({ scores, currentDay }: Props) {
     );
   }
 
-  const total = 42;
-  const xScale = (i: number) => (i / (total - 1)) * chartW;
+  const total = scores.length;
+  const xScale = (i: number) => (i / Math.max(total - 1, 1)) * chartW;
   const yScale = (v: number) => chartH - (v / 100) * chartH;
 
   // Build SVG path
@@ -87,6 +87,20 @@ export default function ProgressChart({ scores, currentDay }: Props) {
         {/* Line */}
         <Path d={pathD} stroke="url(#lineGrad)" strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
 
+        {/* Day 42 marker — shows where the challenge ended */}
+        {total > 42 && (() => {
+          const x = PAD.left + xScale(41); // index 41 = day 42
+          return (
+            <Line
+              x1={x} y1={PAD.top}
+              x2={x} y2={PAD.top + chartH}
+              stroke="rgba(0,229,204,0.3)"
+              strokeWidth={1}
+              strokeDasharray="4 3"
+            />
+          );
+        })()}
+
         {/* Current day dot */}
         <Circle cx={lastPoint.x} cy={lastPoint.y} r={5} fill={dotColor} />
         <Circle cx={lastPoint.x} cy={lastPoint.y} r={9} fill={dotColor} fillOpacity={0.25} />
@@ -99,16 +113,19 @@ export default function ProgressChart({ scores, currentDay }: Props) {
         ))}
       </View>
 
-      {/* X axis labels */}
+      {/* X axis labels — evenly spaced, 7 markers */}
       <View style={[styles.xLabels, { paddingLeft: PAD.left, paddingRight: PAD.right }]}>
-        {[1, 7, 14, 21, 28, 35, 42].map(d => (
-          <Text
-            key={d}
-            style={[styles.xLabel, d === currentDay && styles.xLabelActive]}
-          >
-            {d}
-          </Text>
-        ))}
+        {Array.from({ length: 7 }, (_, i) => {
+          const d = Math.round(1 + i * (total - 1) / 6);
+          return (
+            <Text
+              key={i}
+              style={[styles.xLabel, d === currentDay && styles.xLabelActive]}
+            >
+              {d}
+            </Text>
+          );
+        })}
       </View>
     </View>
   );

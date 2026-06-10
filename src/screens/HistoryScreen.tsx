@@ -25,6 +25,7 @@ import {
   deleteWorkout,
   getDayNumber,
   formatDate,
+  formatMins,
   WorkoutEntry,
 } from "../utils/storage";
 import {
@@ -214,7 +215,7 @@ export default function HistoryScreen({ navigation }: Props) {
             )}
 
             {/* Progress chart */}
-            {workouts.length >= 2 && dayNumber >= 2 && (
+            {workouts.length >= 2 && (
               <View style={styles.chartCard}>
                 <Text style={styles.sectionTitle}>Fitness Score Over Time</Text>
                 <ProgressChart
@@ -269,9 +270,9 @@ export default function HistoryScreen({ navigation }: Props) {
                 <View style={styles.statsRow}>
                   <View style={styles.statChip}>
                     <Text style={styles.statChipValue}>
-                      {score.totalMinutes}
+                      {formatMins(score.totalMinutes)}
                     </Text>
-                    <Text style={styles.statChipLabel}>Total min</Text>
+                    <Text style={styles.statChipLabel}>Total time</Text>
                   </View>
                   <View style={styles.statChip}>
                     <Text style={styles.statChipValue}>{score.streak}</Text>
@@ -363,8 +364,8 @@ export default function HistoryScreen({ navigation }: Props) {
                   </View>
                   <View style={styles.cardStats}>
                     <Text style={styles.cardDuration}>{item.duration} min</Text>
-                    {item.distanceKm != null && (
-                      <Text style={styles.cardDistance}>📍 {item.distanceKm.toFixed(2)} km</Text>
+                    {item.distanceMi != null && (
+                      <Text style={styles.cardDistance}>📍 {item.distanceMi.toFixed(2)} mi</Text>
                     )}
                     {item.notes ? (
                       <Text style={styles.cardNotes} numberOfLines={2}>{item.notes}</Text>
@@ -506,7 +507,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: "center",
   },
-  statChipValue: { color: "#00E5CC", fontSize: 16, fontWeight: "800" },
+  statChipValue: { color: "#00E5CC", fontSize: 13, fontWeight: "800" },
   statChipLabel: { color: "rgba(255,255,255,0.4)", fontSize: 10, marginTop: 2 },
 
   // Empty state
