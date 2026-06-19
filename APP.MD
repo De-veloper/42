@@ -71,3 +71,7 @@ demo.day=N and press return, it will forward to the day N
 
 npx expo run:ios --device
 
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17
+
+npx expo prebuild --platform android
+cd android && ./gradlew bundleRelease
