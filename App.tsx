@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import { initHealthKit } from './src/utils/healthKit';
+import { initHealthKit, autoImportFromHealth } from './src/utils/healthKit';
 import { loadDemoDate } from './src/utils/storage';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -72,7 +72,10 @@ function MainTabs() {
 }
 
 export default function App() {
-  useEffect(() => { initHealthKit(); loadDemoDate(); }, []);
+  useEffect(() => {
+    loadDemoDate();
+    initHealthKit().then(ok => { if (ok) autoImportFromHealth(); });
+  }, []);
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <NavigationContainer>

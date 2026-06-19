@@ -19,7 +19,7 @@ import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../../App';
 import { saveWorkout, updateWorkout, deleteWorkout, loadData, getDayNumber, todayString, WorkoutEntry } from '../utils/storage';
 import { WORKOUT_TYPES, FEELING_LABELS } from '../utils/fitnessScore';
-import { isReady, saveWorkoutToHealth, fetchWorkoutData } from '../utils/healthKit';
+import { saveWorkoutToHealth } from '../utils/healthKit';
 import { logPathSession } from '../utils/paths';
 import {
   requestLocationPermissions,
@@ -46,8 +46,6 @@ export default function LogWorkoutScreen({ navigation, route }: Props) {
   const [notes, setNotes] = useState(existing?.notes ?? '');
   const [photoUri, setPhotoUri] = useState<string | null>(existing?.photoUri ?? null);
   const [saving, setSaving] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [hkData, setHkData] = useState<{ heartRateAvg: number | null; calories: number | null } | null>(null);
 
   // GPS
   const [gpsState, setGpsState] = useState<'idle' | 'tracking' | 'done'>('idle');
@@ -111,21 +109,6 @@ export default function LogWorkoutScreen({ navigation, route }: Props) {
   };
 
   const isEditing = !!existing;
-
-  const handleSyncHealth = async () => {
-    const mins = parseInt(duration, 10);
-    if (!mins || mins <= 0) {
-      Alert.alert('Enter duration first', 'We need the duration to fetch the right time window.');
-      return;
-    }
-    setSyncing(true);
-    const data = await fetchWorkoutData(mins);
-    setHkData(data);
-    setSyncing(false);
-    if (data.heartRateAvg == null && data.calories == null) {
-      Alert.alert('No data found', 'No heart rate or calorie data found in Health for that window.');
-    }
-  };
 
   const handlePickPhoto = () => {
     Alert.alert('Add Photo', 'Choose a source', [
@@ -203,8 +186,6 @@ export default function LogWorkoutScreen({ navigation, route }: Props) {
           duration: mins,
           feeling,
           notes: notes.trim(),
-          ...(hkData?.heartRateAvg != null ? { heartRateAvg: hkData.heartRateAvg } : {}),
-          ...(hkData?.calories != null ? { calories: hkData.calories } : {}),
           ...photoField,
           ...gpsField,
         };
@@ -216,7 +197,6 @@ export default function LogWorkoutScreen({ navigation, route }: Props) {
         saveWorkoutToHealth({
           type: workoutType,
           durationMins: mins,
-          calories: hkData?.calories ?? undefined,
           startDate: new Date(now.getTime() - mins * 60 * 1000),
         });
       }
@@ -341,39 +321,6 @@ export default function LogWorkoutScreen({ navigation, route }: Props) {
                 </View>
               )}
             </View>
-          )}
-
-          {/* Import from Health */}
-          {isReady() && !isEditing && (
-            <>
-              <TouchableOpacity
-                style={styles.hkBtn}
-                onPress={handleSyncHealth}
-                activeOpacity={0.8}
-                disabled={syncing}
-              >
-                <Text style={styles.hkBtnIcon}>❤️</Text>
-                <Text style={styles.hkBtnText}>
-                  {syncing ? 'Reading Health…' : 'Import from Apple Health'}
-                </Text>
-              </TouchableOpacity>
-              {hkData && (hkData.heartRateAvg != null || hkData.calories != null) && (
-                <View style={styles.hkDataRow}>
-                  {hkData.heartRateAvg != null && (
-                    <View style={styles.hkChip}>
-                      <Text style={styles.hkChipValue}>{hkData.heartRateAvg}</Text>
-                      <Text style={styles.hkChipLabel}>avg bpm</Text>
-                    </View>
-                  )}
-                  {hkData.calories != null && (
-                    <View style={styles.hkChip}>
-                      <Text style={styles.hkChipValue}>{hkData.calories}</Text>
-                      <Text style={styles.hkChipLabel}>kcal</Text>
-                    </View>
-                  )}
-                </View>
-              )}
-            </>
           )}
 
           {/* Feeling */}
@@ -610,34 +557,6 @@ const styles = StyleSheet.create({
   },
   gpsDoneText: { color: '#00E5CC', fontSize: 14, fontWeight: '700' },
   gpsDiscard: { color: 'rgba(255,255,255,0.35)', fontSize: 12 },
-
-  // HealthKit
-  hkBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 12,
-    paddingVertical: 11,
-    paddingHorizontal: 16,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,59,48,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,59,48,0.25)',
-  },
-  hkBtnIcon: { fontSize: 16 },
-  hkBtnText: { color: '#FF6B6B', fontSize: 14, fontWeight: '600' },
-  hkDataRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
-  hkChip: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,59,48,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,59,48,0.2)',
-  },
-  hkChipValue: { color: '#FF6B6B', fontSize: 20, fontWeight: '800' },
-  hkChipLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 11, marginTop: 2 },
 
   // Feeling
   feelingRow: { flexDirection: 'row', gap: 8 },

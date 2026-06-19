@@ -1,7 +1,8 @@
-# 42 App — v1.5 Roadmap
+# 42 App — v2.0 Roadmap
 
 **v1 shipped:** iOS App Store + Google Play  
-**v1.5 status:** In development on `v1.5` branch
+**v1.5 shipped:** Journey Paths, GPS distance, swim goals  
+**v2.0 status:** In development on `main` branch
 
 ---
 
@@ -31,11 +32,14 @@
 - Auto-suggest path based on most-logged workout type (currently shows all equally)
 - Path-specific share card improvements (add distance/pace if GPS tracked)
 
-## 🏥 HealthKit (iOS) — Deferred
+## 🏥 HealthKit (iOS) — In Progress
 
-- `react-native-health` crashes on RN 0.85 (new arch incompatibility)
-- Switch to `@kingstinct/react-native-healthkit` when available / time permits
-- Goal: auto-write workouts to Apple Health, import HR + calories for fitness score
+- ✅ Custom native Swift module (no third-party dependency)
+- ✅ Read heart rate + active energy burned from Apple Health
+- ✅ Write workouts to Apple Health
+- ✅ HealthKit entitlement + Info.plist usage descriptions
+- ⬜ Enable HealthKit capability in Apple Developer portal for `com.flying-riceball.FortyTwo`
+- ⬜ Test on device after provisioning profile update
 
 ## 🏠 Home Screen Widget (iOS) — v2
 
@@ -66,4 +70,4 @@
 
 ---
 
-**v2 target:** After using v1.5 in the wild + completing a Journey Path
+**v2 target:** HealthKit + Android Health Connect + AI Coach

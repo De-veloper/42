@@ -571,7 +571,7 @@ export default function SettingsScreen({ navigation }: Props) {
           </View>
           <View style={styles.aboutRow}>
             <Text style={styles.aboutLabel}>Version</Text>
-            <Text style={styles.aboutValue}>2.0.0</Text>
+            <Text style={styles.aboutValue}>2.5.0</Text>
           </View>
         </View>
 

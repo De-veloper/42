@@ -64,6 +64,7 @@ import {
   clearActivePath,
 } from "../utils/paths";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { isReady, autoImportFromHealth, fetchDailySteps } from "../utils/healthKit";
 
 type Props = {
   navigation: CompositeNavigationProp<
@@ -85,11 +86,36 @@ export default function HomeScreen({ navigation }: Props) {
   const [restDays, setRestDays] = useState<string[]>([]);
   const [activePaths, setActivePaths] = useState<ActivePath[]>([]);
   const [userName, setUserName] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [steps, setSteps] = useState(0);
   const shareCardRef = useRef<ViewShotRef>(null);
 
   useEffect(() => {
     getSavedReminderTime().then(({ hour }) => setReminderHour(hour));
   }, []);
+
+  const handleSyncHealth = async () => {
+    if (!isReady()) {
+      Alert.alert('Health not ready', 'HealthKit is not initialized. Check Health permissions in Settings.');
+      return;
+    }
+    setSyncing(true);
+    const result = await autoImportFromHealth();
+    setSyncing(false);
+    if (result.imported > 0) {
+      const wks = await loadWorkouts();
+      setWorkouts(wks);
+      Alert.alert('Synced', `${result.imported} workout${result.imported > 1 ? 's' : ''} imported from Apple Health.`);
+    } else {
+      const details = [
+        `Found ${result.found} in Health`,
+        result.skippedAlreadyImported ? `${result.skippedAlreadyImported} already imported` : '',
+        result.skippedDuplicate ? `${result.skippedDuplicate} duplicate` : '',
+        result.skippedShort ? `${result.skippedShort} too short` : '',
+      ].filter(Boolean).join('\n');
+      Alert.alert('No new workouts', details || 'No workouts found in Apple Health.');
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -106,6 +132,15 @@ export default function HomeScreen({ navigation }: Props) {
         setRestDays(rds);
         setActivePaths(aps);
         setUserName(name);
+        // Auto-sync from HealthKit on focus
+        if (appData.programStarted && isReady()) {
+          const result = await autoImportFromHealth();
+          if (result.imported > 0) {
+            const updated = await loadWorkouts();
+            setWorkouts(updated);
+          }
+          fetchDailySteps(todayString()).then(setSteps);
+        }
       })();
     }, []),
   );
@@ -237,6 +272,11 @@ export default function HomeScreen({ navigation }: Props) {
             </Text>
           </View>
           <View style={styles.headerActions}>
+            {data.programStarted && isReady() && (
+              <TouchableOpacity onPress={handleSyncHealth} style={styles.syncBtn} disabled={syncing} activeOpacity={0.75}>
+                <Text style={styles.syncBtnText}>{syncing ? '⏳' : '❤️‍🩹'}</Text>
+              </TouchableOpacity>
+            )}
             {data.programStarted && (
               <TouchableOpacity onPress={handleShare} style={styles.shareBtn}>
                 <Text style={styles.shareBtnText}>↑ Share</Text>
@@ -554,6 +594,14 @@ export default function HomeScreen({ navigation }: Props) {
                     </Text>
                   )}
                 </View>
+
+                {steps > 0 && (
+                  <View style={styles.stepsRow}>
+                    <Text style={styles.stepsIcon}>👟</Text>
+                    <Text style={styles.stepsValue}>{steps.toLocaleString()}</Text>
+                    <Text style={styles.stepsLabel}>steps today</Text>
+                  </View>
+                )}
 
                 {isRestDay ? (
                   /* ── REST DAY ── */
@@ -899,6 +947,15 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,229,204,0.08)",
   },
   shareBtnText: { color: "#00E5CC", fontSize: 13, fontWeight: "700" },
+  syncBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,59,48,0.3)",
+    backgroundColor: "rgba(255,59,48,0.08)",
+  },
+  syncBtnText: { fontSize: 16 },
 
   // Share card (off-screen, captured by ViewShot)
   shareCard: { position: "absolute", left: -9999, top: 0, width: 400 },
@@ -1384,6 +1441,21 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   todayCount: { color: "#00E5CC", fontSize: 13, fontWeight: "600" },
+  stepsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  stepsIcon: { fontSize: 16 },
+  stepsValue: { color: "#00E5CC", fontSize: 18, fontWeight: "800" },
+  stepsLabel: { color: "rgba(255,255,255,0.4)", fontSize: 13 },
 
   todayRow: {
     flexDirection: "row",
@@ -1453,7 +1525,7 @@ const styles = StyleSheet.create({
   scoreValue: {
     color: "rgba(255,255,255,0.45)",
     fontSize: 12,
-    width: 26,
+    minWidth: 30,
     textAlign: "right",
   },
   totalScoreRow: {
